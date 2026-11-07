@@ -145,13 +145,13 @@ def _generate_mock_content(node: str, messages: list[dict[str, str]]) -> str:
             return "Classificação: MANUTENÇÃO (encaminhado ao Nó 2 — Validador)."
         return "Classificação: COMERCIAL (encaminhado ao Nó 1 — Comercial)."
 
-    if node == "commercial":
+    if node in ("commercial", "commercial_node1"):
         return (
             "Olá! Seja muito bem-vindo ao nosso imóvel. Temos wi-fi de alta velocidade, "
             "cozinha completa e excelente localização. Deseja confirmar as datas da sua estadia?"
         )
 
-    if node in ("validator", "triage"):
+    if node in ("validator", "validator_node2", "triage"):
         return (
             "Recebemos o relato de manutenção. Os detalhes foram classificados e encaminhados "
             "ao Nó 3 para cotação com prestadores validados."

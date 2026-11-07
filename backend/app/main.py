@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.chat import chat_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.models import MaintenanceTicket, Property
@@ -42,6 +43,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(chat_router, prefix="/api")
 
 
 @app.get("/health", tags=["Saúde"])
