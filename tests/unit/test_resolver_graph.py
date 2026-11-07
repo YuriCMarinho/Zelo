@@ -10,6 +10,7 @@ Cobre:
 """
 
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,6 +20,7 @@ from app.agents import resolver_graph
 from app.agents.resolver_graph import (
     LangGraphResolverStarter,
     compiled_resolver_graph,
+    get_default_checkpointer,
     resume_resolution,
 )
 from app.agents.resolver_timeouts import (
@@ -28,7 +30,7 @@ from app.agents.resolver_timeouts import (
     register_adm_reminder,
     register_quote_timeout,
 )
-from app.db.models import Booking, MaintenanceTicket, Property, Provider, Quote
+from app.db.models import AuditEvent, Booking, MaintenanceTicket, Property, Provider, Quote
 from app.schemas.common import (
     ProviderCategory,
     QuoteStatus,
@@ -452,7 +454,10 @@ async def test_langgraph_happy_path_interrupt_and_resume(
     quotes = db_session.query(Quote).filter(Quote.ticket_id == ticket.id).all()
     assert len(quotes) >= 1
     assert all(q.status == QuoteStatus.RECEIVED.value for q in quotes)
-    assert state_after_pause.get("status") == TicketStatus.AWAITING_ADM_APPROVAL.value
+    assert state_after_pause.get("status") in (
+        TicketStatus.WAITING_QUOTES.value,
+        TicketStatus.AWAITING_ADM_APPROVAL.value,
+    )
 
     # ADM escolhe o prestador 1
     selected_provider = sample_providers[0]
@@ -468,6 +473,24 @@ async def test_langgraph_happy_path_interrupt_and_resume(
     assert ticket.selected_provider_id == selected_provider.id
     assert ticket.scheduled_date is not None
     assert final_state.get("status") == TicketStatus.RESOLVED.value
+
+    # Verifica gravação formal do evento de auditoria
+    audit = (
+        db_session.query(AuditEvent)
+        .filter(AuditEvent.run_id == ticket.run_id, AuditEvent.event_type == "ticket_resolved")
+        .first()
+    )
+    assert audit is not None
+    assert audit.payload.get("selected_provider_id") == selected_provider.id
+
+
+def test_checkpointer_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verifica seleção entre PostgresSaver (produção) e MemorySaver (testes/sqlite)."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    # Em ambiente de teste, deve retornar MemorySaver
+    saver = get_default_checkpointer()
+    assert isinstance(saver, MemorySaver)
 
 
 @pytest.mark.asyncio
@@ -508,8 +531,9 @@ async def test_langgraph_alternative_path_refusal_loop(
     db_session: Session,
     sample_property: Property,
     sample_providers: list[Provider],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Quando o prestador recusa a primeira data proposta, o grafo tenta uma nova data."""
+    """Quando o prestador recusa a primeira data proposta via LLM, o grafo tenta uma nova data."""
     ticket = MaintenanceTicket(
         id="tick-refuse-001",
         run_id="run-refuse-001",
@@ -524,6 +548,31 @@ async def test_langgraph_alternative_path_refusal_loop(
     db_session.add(ticket)
     db_session.commit()
 
+    from app.core.llm import LLMResponse
+    orig_generate = resolver_graph.generate
+    call_count = 0
+
+    async def mock_confirm_refuse_once(*args: Any, **kwargs: Any) -> LLMResponse:
+        nonlocal call_count
+        if kwargs.get("node") == "resolver_date_confirm":
+            call_count += 1
+            if call_count == 1:
+                return LLMResponse(
+                    content="RECUSO: Não posso nesta data devido a outro serviço.",
+                    model="Qwen/Qwen3.5-4B",
+                    run_id="r",
+                    node="resolver_date_confirm",
+                )
+            return LLMResponse(
+                content="ACEITO: Confirmo a data proposta.",
+                model="Qwen/Qwen3.5-4B",
+                run_id="r",
+                node="resolver_date_confirm",
+            )
+        return await orig_generate(*args, **kwargs)
+
+    monkeypatch.setattr(resolver_graph, "generate", mock_confirm_refuse_once)
+
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
@@ -531,8 +580,7 @@ async def test_langgraph_alternative_path_refusal_loop(
         run_id=ticket.run_id,
     )
 
-    # Inicia com refuse_dates_count=1 (recusará a 1ª data e aceitará a 2ª)
-    await starter.astart_resolution(req, db=db_session, refuse_dates_count=1)
+    await starter.astart_resolution(req, db=db_session)
 
     # Retoma aprovação com prestador 2
     selected_provider = sample_providers[1]
@@ -554,6 +602,7 @@ async def test_langgraph_alternative_path_max_refusals_escalates(
     db_session: Session,
     sample_property: Property,
     sample_providers: list[Provider],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Quando o prestador recusa 3 vezes a data, escalona para o ADM humano."""
     ticket = MaintenanceTicket(
@@ -570,6 +619,21 @@ async def test_langgraph_alternative_path_max_refusals_escalates(
     db_session.add(ticket)
     db_session.commit()
 
+    from app.core.llm import LLMResponse
+    orig_generate = resolver_graph.generate
+
+    async def mock_confirm_always_refuse(*args: Any, **kwargs: Any) -> LLMResponse:
+        if kwargs.get("node") == "resolver_date_confirm":
+            return LLMResponse(
+                content="RECUSO: Indisponível em todas as datas sugeridas.",
+                model="Qwen/Qwen3.5-4B",
+                run_id="r",
+                node="resolver_date_confirm",
+            )
+        return await orig_generate(*args, **kwargs)
+
+    monkeypatch.setattr(resolver_graph, "generate", mock_confirm_always_refuse)
+
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
@@ -577,8 +641,7 @@ async def test_langgraph_alternative_path_max_refusals_escalates(
         run_id=ticket.run_id,
     )
 
-    # Inicia com refuse_dates_count=3
-    await starter.astart_resolution(req, db=db_session, refuse_dates_count=3)
+    await starter.astart_resolution(req, db=db_session)
 
     selected_provider = sample_providers[0]
     final_state = await resume_resolution(

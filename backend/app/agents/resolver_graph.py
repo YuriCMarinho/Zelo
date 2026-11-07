@@ -1,7 +1,7 @@
 """Nó 3: Agente Resolvedor em LangGraph (Fluxo C — Manutenção).
 
 Implementa a máquina de estados completa de 5 passos da manutenção:
-1. Coleta de Orçamentos de Prestadores Validados (com fallback Nó S)
+1. Coleta de Orçamentos de Prestadores Validados (com fallback assíncrono Nó S)
 2. Síntese Comparativa e Aprovação Humana do Anfitrião (interrupt)
 3. Proposta de Datas conforme regra determinística Urgência × Agenda
 4. Confirmação do Dia ("Devolutiva do Dia" com loop em caso de recusa)
@@ -9,16 +9,26 @@ Implementa a máquina de estados completa de 5 passos da manutenção:
 """
 
 import logging
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from langgraph.checkpoint.base import BaseCheckpointSaver  # type: ignore[import-untyped]
 from langgraph.checkpoint.memory import MemorySaver  # type: ignore[import-untyped]
+from langgraph.checkpoint.postgres import PostgresSaver  # type: ignore[import-untyped]
 from langgraph.graph import END, START, StateGraph  # type: ignore[import-untyped]
 from langgraph.types import Command, interrupt  # type: ignore[import-untyped]
+from psycopg.rows import dict_row  # type: ignore[import-untyped]
+from psycopg_pool import ConnectionPool  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agents.resolver_timeouts import (
+    cancel_timeout_job,
+    register_adm_reminder,
+    register_quote_timeout,
+)
+from app.core.config import settings
 from app.core.llm import generate
+from app.db.models.audit import AuditEvent
 from app.db.models.property import Property
 from app.db.models.provider import Provider
 from app.db.models.quote import Quote
@@ -26,6 +36,7 @@ from app.db.models.ticket import MaintenanceTicket
 from app.db.session import SessionLocal
 from app.schemas.common import ProviderCategory, QuoteStatus, TicketStatus
 from app.schemas.resolver import ResolutionRequest, ResolverStarter
+from app.services.provider_collector import collect_on_demand
 from app.services.scheduling import find_optimal_schedule
 
 logger = logging.getLogger("smartrepair.resolver_graph")
@@ -48,7 +59,6 @@ class ResolverState(TypedDict):
     proposed_date: str | None
     notify_tenant: bool
     retry_date_count: int
-    refuse_dates_count: int  # Usado para simular recusas de data em testes/caminhos alternativos
     status: str
     error: str | None
 
@@ -82,11 +92,39 @@ async def dispatch_or_fallback(state: ResolverState) -> dict[str, Any]:
 
         if not providers:
             logger.warning(
-                "Nenhum prestador validado encontrado para a categoria; acionando fallback",
-                extra={"run_id": run_id, "category": category_val},
+                "Nenhum prestador validado encontrado para a categoria; "
+                "acionando fallback assíncrono Nó S e alertando ADM",
+                extra={"run_id": run_id, "category": category_val, "ticket_id": ticket_id},
             )
             ticket.status = TicketStatus.NO_PROVIDERS_FALLBACK.value
+
+            # Enfileira/dispara busca sob demanda no Nó S
+            prop = db.get(Property, state["property_id"])
+            region = prop.city if prop and prop.city else "São Paulo, SP"
+            cat_enum = (
+                ProviderCategory(category_val)
+                if category_val in ProviderCategory._value2member_map_
+                else ProviderCategory.GENERAL_MAINTENANCE
+            )
+            try:
+                await collect_on_demand(db=db, category=cat_enum, region=region)
+            except Exception as coll_err:
+                logger.warning(
+                    "Falha ao acionar coleta sob demanda do Nó S",
+                    extra={"error": str(coll_err), "run_id": run_id, "ticket_id": ticket_id},
+                )
+
+            # Registra evento de auditoria informando o fallback ao ADM
+            audit = AuditEvent(
+                run_id=run_id,
+                ticket_id=ticket_id,
+                node="dispatch_or_fallback",
+                event_type="no_providers_fallback",
+                payload={"ticket_id": ticket_id, "category": category_val, "notified_adm": True},
+            )
+            db.add(audit)
             db.commit()
+
             return {
                 "candidate_providers": [],
                 "status": TicketStatus.NO_PROVIDERS_FALLBACK.value,
@@ -131,12 +169,30 @@ async def request_and_receive_quotes(state: ResolverState) -> dict[str, Any]:
             "error": "Nenhum prestador disponível para envio de orçamentos.",
         }
 
+    # Registra timer de timeout para resposta dos orçamentos
+    def _on_quote_timeout(t_id: str, r_id: str) -> None:
+        logger.warning(
+            "Timeout aguardando respostas de cotação dos prestadores",
+            extra={"ticket_id": t_id, "run_id": r_id},
+        )
+
+    register_quote_timeout(
+        ticket_id=ticket_id,
+        run_id=run_id,
+        timeout_minutes=60,
+        callback=_on_quote_timeout,
+    )
+
     quotes_recorded: list[dict[str, Any]] = []
 
     with SessionLocal() as db:
         ticket = db.get(MaintenanceTicket, ticket_id)
         if not ticket:
             return {"status": "error", "error": "Ticket não encontrado"}
+
+        # Atualiza status para WAITING_QUOTES enquanto coleta orçamentos
+        ticket.status = TicketStatus.WAITING_QUOTES.value
+        db.commit()
 
         base_rate_map = {
             ProviderCategory.PLUMBER.value: 180.0,
@@ -148,23 +204,24 @@ async def request_and_receive_quotes(state: ResolverState) -> dict[str, Any]:
         base_rate = base_rate_map.get(ticket.category, 190.0)
 
         for idx, provider_data in enumerate(candidates):
-            # Garante persistência da cotação
-            quote_query = select(Quote).where(
-                Quote.ticket_id == ticket_id,
-                Quote.provider_id == provider_data["id"],
+            # Cria pedido formal de orçamento se não existir
+            quote = (
+                db.query(Quote)
+                .filter(
+                    Quote.ticket_id == ticket.id,
+                    Quote.provider_id == provider_data["id"],
+                )
+                .first()
             )
-            quote = db.execute(quote_query).scalar_one_or_none()
-
             if not quote:
                 quote = Quote(
-                    ticket_id=ticket_id,
+                    ticket_id=ticket.id,
                     run_id=run_id,
                     provider_id=provider_data["id"],
                     status=QuoteStatus.REQUESTED.value,
                 )
                 db.add(quote)
-                db.commit()
-                db.refresh(quote)
+                db.flush()
 
             # Simula/gera resposta de orçamento via LLM
             prompt = [
@@ -183,7 +240,7 @@ async def request_and_receive_quotes(state: ResolverState) -> dict[str, Any]:
                 model="Qwen/Qwen3.5-4B",
                 max_tokens=128,
                 run_id=run_id,
-                node="resolver_quote",
+                node="resolver_quote_request",
                 db=db,
             )
 
@@ -205,12 +262,15 @@ async def request_and_receive_quotes(state: ResolverState) -> dict[str, Any]:
                 }
             )
 
-        ticket.status = TicketStatus.AWAITING_ADM_APPROVAL.value
+        # Orçamentos recebidos; cancela timer de timeout de orçamentos
+        cancel_timeout_job(f"timeout_quote_{ticket_id}")
+
+        ticket.status = TicketStatus.WAITING_QUOTES.value
         db.commit()
 
     return {
         "quotes": quotes_recorded,
-        "status": TicketStatus.AWAITING_ADM_APPROVAL.value,
+        "status": TicketStatus.WAITING_QUOTES.value,
     }
 
 
@@ -261,6 +321,20 @@ async def synthesize_for_adm(state: ResolverState) -> dict[str, Any]:
         )
         synthesis = resp.content
 
+        # Registra lembrete na sessão do ADM
+        def _on_adm_reminder(t_id: str, r_id: str) -> None:
+            logger.info(
+                "Lembrete de aprovação de orçamento enviado ao ADM",
+                extra={"ticket_id": t_id, "run_id": r_id},
+            )
+
+        register_adm_reminder(
+            ticket_id=ticket_id,
+            run_id=run_id,
+            reminder_minutes=120,
+            callback=_on_adm_reminder,
+        )
+
         if ticket:
             ticket.status = TicketStatus.AWAITING_ADM_APPROVAL.value
             db.commit()
@@ -275,6 +349,9 @@ async def synthesize_for_adm(state: ResolverState) -> dict[str, Any]:
             "synthesis": synthesis,
         }
     )
+
+    # Cancelamento do lembrete do ADM após decisão
+    cancel_timeout_job(f"reminder_adm_{ticket_id}")
 
     selected_id: str | None = None
     if isinstance(decision, dict):
@@ -307,7 +384,6 @@ async def propose_date_and_confirm(state: ResolverState) -> dict[str, Any]:
     run_id = state["run_id"]
     urgency = state["urgency"]
     retry_count = state.get("retry_date_count", 0)
-    refuse_target = state.get("refuse_dates_count", 0)
 
     # Limite máximo de 3 tentativas de agendamento antes de escalar
     if retry_count >= 3:
@@ -318,6 +394,7 @@ async def propose_date_and_confirm(state: ResolverState) -> dict[str, Any]:
                 db.commit()
         return {
             "status": TicketStatus.ESCALATED_TO_ADM.value,
+            "retry_date_count": retry_count,
             "error": "Prestador recusou 3 datas propostas; escalado ao anfitrião.",
         }
 
@@ -337,37 +414,58 @@ async def propose_date_and_confirm(state: ResolverState) -> dict[str, Any]:
         ticket.status = TicketStatus.WAITING_DATE_CONFIRMATION.value
         db.commit()
 
-        # Simula comunicação de confirmação do dia via LLM
+        # Comunicação de confirmação do dia via LLM
         prompt = [
             {
                 "role": "system",
                 "content": (
-                    "Você é o prestador contratado. A data proposta para o serviço é "
-                    f"{proposal.proposed_date.strftime('%d/%m/%Y às %H:%M')}. "
-                    "Confirme o aceite do serviço."
+                    "Você é o prestador contratado. Analise a proposta de data e "
+                    "horário para o serviço. Responda 'ACEITO' se puder realizar o serviço, "
+                    "ou 'RECUSO' seguido do motivo caso não tenha disponibilidade."
                 ),
             },
-            {"role": "user", "content": "Você confirma a data proposta?"},
+            {
+                "role": "user",
+                "content": (
+                    f"Data proposta para o reparo ({ticket.description}): "
+                    f"{proposal.proposed_date.strftime('%d/%m/%Y às %H:%M')}. "
+                    "Você confirma esta data?"
+                ),
+            },
         ]
-        await generate(
+        resp = await generate(
             messages=prompt,
             model="Qwen/Qwen3.5-4B",
-            max_tokens=128,
+            max_tokens=64,
             run_id=run_id,
             node="resolver_date_confirm",
             db=db,
         )
 
-        # Verifica se há recusa de data programada para teste de caminhos alternativos
-        if retry_count < refuse_target:
+        resp_text = (resp.content or "").strip().lower()
+        refused = any(
+            t in resp_text
+            for t in ["recuso", "não posso", "indisponível", "rejeito", "infelizmente não"]
+        )
+
+        if refused:
+            new_retry_count = retry_count + 1
             logger.info(
                 "Prestador recusou a data proposta; retornando ao Passo 3 em loop",
-                extra={"retry_count": retry_count, "ticket_id": ticket_id},
+                extra={"retry_count": new_retry_count, "ticket_id": ticket_id, "run_id": run_id},
             )
+            if new_retry_count >= 3:
+                ticket.status = TicketStatus.ESCALATED_TO_ADM.value
+                db.commit()
+                return {
+                    "status": TicketStatus.ESCALATED_TO_ADM.value,
+                    "retry_date_count": new_retry_count,
+                    "error": "Prestador recusou 3 datas propostas; escalado ao anfitrião.",
+                }
             return {
                 "proposed_date": proposal.proposed_date.isoformat(),
                 "notify_tenant": proposal.notify_tenant,
-                "retry_date_count": retry_count + 1,
+                "retry_date_count": new_retry_count,
                 "status": TicketStatus.PROPOSING_DATE.value,
             }
 
@@ -389,7 +487,7 @@ async def notify_tenant_and_resolve(state: ResolverState) -> dict[str, Any]:
     ticket_id = state["ticket_id"]
     run_id = state["run_id"]
     notify_needed = state.get("notify_tenant", False)
-    date_str = state.get("proposed_date", "")
+    date_str = state.get("proposed_date") or "Data confirmada"
 
     with SessionLocal() as db:
         ticket = db.get(MaintenanceTicket, ticket_id)
@@ -427,36 +525,94 @@ async def notify_tenant_and_resolve(state: ResolverState) -> dict[str, Any]:
         ticket.status = TicketStatus.RESOLVED.value
         db.commit()
 
-    return {"status": TicketStatus.RESOLVED.value}
+        # Registra formalmente a conclusão do chamado na trilha de auditoria
+        audit = AuditEvent(
+            run_id=run_id,
+            ticket_id=ticket.id,
+            node="notify_tenant_and_resolve",
+            event_type="ticket_resolved",
+            payload={
+                "ticket_id": ticket.id,
+                "selected_provider_id": ticket.selected_provider_id,
+                "scheduled_date": str(ticket.scheduled_date),
+                "notify_tenant": ticket.notify_tenant,
+            },
+        )
+        db.add(audit)
+        db.commit()
+
+    logger.info(
+        "Chamado de manutenção resolvido com sucesso",
+        extra={"ticket_id": ticket_id, "run_id": run_id, "notify_tenant": notify_needed},
+    )
+
+    return {
+        "status": TicketStatus.RESOLVED.value,
+        "error": None,
+    }
 
 
 # -----------------------------------------------------------------------------
-# Compilação do Grafo LangGraph
+# Roteadores Condicionais
 # -----------------------------------------------------------------------------
 
 
 def route_after_dispatch(state: ResolverState) -> str:
-    if state["status"] == TicketStatus.NO_PROVIDERS_FALLBACK.value:
+    """Roteia após a verificação de prestadores disponíveis."""
+    status = state.get("status")
+    if status == TicketStatus.NO_PROVIDERS_FALLBACK.value:
         return END
     return "request_and_receive_quotes"
 
 
 def route_after_quotes(state: ResolverState) -> str:
-    if state["status"] == TicketStatus.ESCALATED_TO_ADM.value:
+    """Roteia após o recebimento e análise de orçamentos."""
+    status = state.get("status")
+    if status == TicketStatus.ESCALATED_TO_ADM.value:
         return END
     return "synthesize_for_adm"
 
 
 def route_after_propose_date(state: ResolverState) -> str:
-    if state["status"] == TicketStatus.PROPOSING_DATE.value:
-        return "propose_date_and_confirm"
-    if state["status"] == TicketStatus.ESCALATED_TO_ADM.value:
+    """Roteia após a tentativa de confirmação de data."""
+    status = state.get("status")
+    if status == TicketStatus.ESCALATED_TO_ADM.value:
         return END
+    if status == TicketStatus.PROPOSING_DATE.value:
+        # Loop de retorno ao Passo 3/4 para propor nova data
+        return "propose_date_and_confirm"
     return "notify_tenant_and_resolve"
 
 
-def build_resolver_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any:
-    """Constrói e compila o StateGraph LangGraph para o Nó 3 com suporte a checkpointer."""
+# -----------------------------------------------------------------------------
+# Compilação do Grafo e Checkpointer
+# -----------------------------------------------------------------------------
+
+
+def get_default_checkpointer() -> Any:
+    """Retorna PostgresSaver em produção com PostgreSQL, ou MemorySaver em testes/SQLite."""
+    if settings.database_url.startswith("postgresql") and settings.environment != "testing":
+        try:
+            pool = ConnectionPool(
+                settings.database_url,
+                open=True,
+                kwargs={"row_factory": dict_row, "autocommit": True},
+            )
+            saver = PostgresSaver(cast(Any, pool))
+            saver.setup()
+            return saver
+        except Exception as exc:
+            logger.warning(
+                "Falha ao conectar PostgresSaver; utilizando MemorySaver como fallback",
+                extra={"error": str(exc)},
+            )
+    return MemorySaver()
+
+
+def build_resolver_graph(
+    checkpointer: BaseCheckpointSaver | None = None,
+) -> Any:
+    """Constrói e compila o grafo de estados do Nó 3 (Resolvedor)."""
     builder = StateGraph(ResolverState)
 
     builder.add_node("dispatch_or_fallback", dispatch_or_fallback)
@@ -472,12 +628,12 @@ def build_resolver_graph(checkpointer: BaseCheckpointSaver | None = None) -> Any
     builder.add_conditional_edges("propose_date_and_confirm", route_after_propose_date)
     builder.add_edge("notify_tenant_and_resolve", END)
 
-    saver = checkpointer or MemorySaver()
+    saver = checkpointer or get_default_checkpointer()
     return builder.compile(checkpointer=saver)
 
 
-# Instância padrão em memória para execução contínua
-default_checkpointer = MemorySaver()
+# Instância padrão
+default_checkpointer = get_default_checkpointer()
 compiled_resolver_graph = build_resolver_graph(default_checkpointer)
 
 
@@ -499,7 +655,6 @@ class LangGraphResolverStarter(ResolverStarter):
         self,
         request: ResolutionRequest,
         db: Session | None = None,
-        refuse_dates_count: int = 0,
     ) -> dict[str, Any]:
         """Inicia a resolução assíncrona do chamado no grafo LangGraph."""
         session_to_use = db or SessionLocal()
@@ -514,7 +669,11 @@ class LangGraphResolverStarter(ResolverStarter):
             if ticket.status not in (TicketStatus.OPEN.value, "open"):
                 logger.info(
                     "Ticket já em andamento ou finalizado; execução ignorada para idempotência.",
-                    extra={"ticket_id": ticket.id, "status": ticket.status},
+                    extra={
+                        "ticket_id": ticket.id,
+                        "status": ticket.status,
+                        "run_id": request.run_id,
+                    },
                 )
                 thread_config = {"configurable": {"thread_id": request.ticket_id}}
                 state_snapshot = await self.graph.aget_state(thread_config)
@@ -537,7 +696,6 @@ class LangGraphResolverStarter(ResolverStarter):
                 "proposed_date": None,
                 "notify_tenant": False,
                 "retry_date_count": 0,
-                "refuse_dates_count": refuse_dates_count,
                 "status": TicketStatus.OPEN.value,
                 "error": None,
             }
