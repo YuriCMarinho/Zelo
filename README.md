@@ -1,20 +1,36 @@
-# SmartRepair AI — protótipo de dashboard
+# SmartRepair AI — Gestão Inteligente de Imóveis de Temporada
 
-Protótipo navegável para gestores de imóveis de temporada. O dashboard destaca chamados críticos, tempo até o próximo check-in e uma aprovação de orçamento com decisão humana.
+Plataforma de agentes de IA de ponta a ponta para gestores e anfitriões de imóveis de temporada (experiência estilo Airbnb). O sistema atende potenciais hóspedes de forma calorosa até a reserva e resolve problemas de manutenção relatados por inquilinos ou camareiras de ponta a ponta — encontrando, validando, orçando e agendando prestadores de serviço com aprovação humana do anfitrião (ADM).
 
-## Executar
+---
 
-```bash
-npm install
-npm run dev
-```
+## Arquitetura dos 3 Fluxos Independentes
 
-Abra o endereço exibido pelo Vite. Para conferir a compilação de produção, execute `npm run build`.
+O produto opera com um **Ponto Único de Chat por Imóvel** (equipado com um roteador barato) e **três fluxos independentes** conectados pelo banco de dados PostgreSQL e pelo `property_id`:
 
-Prévia das telas: [desktop](previews/dashboard-desktop.png) e [celular](previews/dashboard-mobile.png).
+1. **Fluxo A — Aquisição (`Roteador → Nó 1 Comercial → Reserva`):**
+   - Tira dúvidas sobre o imóvel de forma calorosa até confirmar a reserva ("temos inquilino").
+2. **Fluxo B — Coleta e Validação de Prestadores (`Nó S via APScheduler`):**
+   - Job periódico e assíncrono que busca prestadores por categoria/região (Google Places API / fixture), envia mensagem para validar o contato e grava no PostgreSQL **apenas prestadores que confirmaram**.
+3. **Fluxo C — Manutenção Ponta a Ponta (`Roteador → Nó 2 Validador → Nó 3 Resolvedor ⇄ ADM / Prestador → Aviso ao Inquilino`):**
+   - **Nó 2 (Validador):** Recebe o relato do **inquilino ou da camareira**, faz perguntas de esclarecimento se necessário, classifica categoria, urgência e local no imóvel e gera um ticket estruturado (Pydantic v2).
+   - **Nó 3 (Resolvedor em LangGraph):**
+     1. Pede orçamento a `N` prestadores validados do DB (sem negociar preço) com controle de timeout.
+     2. Notifica o anfitrião (**ADM**) na **sessão exclusiva Agente ⇄ Anfitrião daquele imóvel** e aguarda a escolha humana (*human-in-the-loop*).
+     3. Consulta a agenda do imóvel e propõe datas ao prestador escolhido conforme a **urgência** (urgente = o quanto antes, mesmo com hóspede; não urgente = prefere dias sem hóspede).
+     4. Recebe a confirmação do dia ("devolutiva do dia") do prestador; se recusar, retorna ao passo 3.
+     5. Se houver inquilino hospedado na data, avisa o inquilino sobre o dia da manutenção, registra na agenda e fecha o ticket.
 
-Os dados e as métricas são demonstrativos. Relatos enviados, aprovações e conclusões ficam salvos no `localStorage` do navegador. Um novo relato pode avançar da triagem para propostas simuladas, aprovação e conclusão; a última etapa exige a confirmação do gestor. As fotos são ilustrativas e não representam os imóveis ou chamados reais. A triagem, o contato com prestadores e o registro financeiro são simulações; não há integração com Airbnb, Booking, WhatsApp, pagamentos ou backend.
+---
 
-## Fotos do protótipo
+## Documentação e Governança (Time de 4 Devs + 3 Agentes de IA)
 
-Imagens gratuitas do Pexels: [sala](https://www.pexels.com/photo/luxury-living-room-in-modern-apartment-7534563/), [quarto](https://www.pexels.com/photo/stylish-interior-of-bedroom-in-modern-apartment-6636262/), [loft](https://www.pexels.com/photo/modern-apartment-interior-with-bed-near-glass-door-to-kitchen-6444969/) e [torneira](https://www.pexels.com/photo/photo-of-faucet-3787025/).
+- **Fonte da verdade do escopo:** [`planejamento2.md`](planejamento2.md)
+- **Plano de implementação, arquitetura e sprints:** [`docs/PLAN.md`](docs/PLAN.md)
+- **Estimativa, tetos e controle de custos (Featherless + Langfuse):** [`docs/COST.md`](docs/COST.md)
+- **Status atual das fases, sprints e tasks:** [`docs/STATUS.md`](docs/STATUS.md)
+- **Regras de repositório, branches, commits e DoR/DoD:** [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)
+- **Instruções dos 3 Agentes de Desenvolvimento:**
+  - Planejador: [`agents/planner.md`](agents/planner.md)
+  - Implementador: [`agents/implementer.md`](agents/implementer.md)
+  - Revisor / Auditor: [`agents/reviewer.md`](agents/reviewer.md)
