@@ -14,6 +14,7 @@ from app.schemas.cost import CostRecordCreate, CostRecordRead, CostSummary
 from app.schemas.property import PropertyBase, PropertyCreate, PropertyRead
 from app.schemas.provider import ProviderBase, ProviderCreate, ProviderRead
 from app.schemas.quote import QuoteBase, QuoteCreateRequest, QuoteRead, QuoteResponseCreate
+from app.schemas.resolver import ResolutionRequest, ResolverStarter
 from app.schemas.ticket import (
     MaintenanceTicketRead,
     TicketApprovalRequest,
@@ -55,4 +56,6 @@ __all__ = [
     "CostRecordCreate",
     "CostRecordRead",
     "CostSummary",
+    "ResolutionRequest",
+    "ResolverStarter",
 ]

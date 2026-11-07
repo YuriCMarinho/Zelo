@@ -18,9 +18,13 @@ class TicketUrgency(StrEnum):
 
 
 class TicketStatus(StrEnum):
+    """Estados do ticket do Fluxo C; espelha a máquina de estados de docs/PLAN.md §3."""
+
     TRIAGING = "triaging"
     OPEN = "open"
+    NO_PROVIDERS_FALLBACK = "no_providers_fallback"
     REQUESTING_QUOTES = "requesting_quotes"
+    WAITING_QUOTES = "waiting_quotes"
     AWAITING_ADM_APPROVAL = "awaiting_adm_approval"
     PROPOSING_DATE = "proposing_date"
     WAITING_DATE_CONFIRMATION = "waiting_date_confirmation"
