@@ -43,4 +43,17 @@ describe('navegação por imóvel', () => {
     await user.click(screen.getByRole('link', { name: 'Chat do imóvel' }))
     expect(screen.queryByText('Mensagem da Aurora')).not.toBeInTheDocument()
   })
+
+  it('permite escolher um orçamento apenas na demonstração local', async () => {
+    const user = userEvent.setup()
+    expect(parseRoute('/imoveis/casa-aurora', '?aba=orcamentos')).toEqual({ view: 'property', propertyId: 'casa-aurora', tab: 'orcamentos' })
+    render(<App />)
+    await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
+    await user.click(screen.getByRole('link', { name: 'Orçamentos' }))
+    await user.click(screen.getByRole('radio', { name: /Volt Reparos/ }))
+    expect(screen.getByRole('radio', { name: /Volt Reparos/ })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('button', { name: /Escolher Volt Reparos/ }))
+    expect(screen.getByText('Escolha simulada')).toBeInTheDocument()
+    expect(screen.getByText(/nenhuma contratação ou agendamento/)).toBeInTheDocument()
+  })
 })
