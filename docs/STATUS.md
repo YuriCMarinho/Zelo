@@ -1,6 +1,6 @@
 # Status do Projeto — Fonte da Verdade (`STATUS.md`)
 
-Atualizado em: `2026-11-07` (alinhado ao `planejamento2.md`).
+Atualizado em: `2026-11-07` (alinhado a `docs/PLAN.md` como fonte única da verdade).
 
 Estados permitidos: **não iniciada** | **em andamento** | **em revisão** | **aprovada** | **bloqueada**.
 Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-lo ao iniciar e ao concluir seu trabalho.
@@ -11,8 +11,8 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 
 | Fase | Estado | Responsável | Branch Atual | Último Commit | Bloqueios / Decisões Confirmadas |
 | --- | --- | --- | --- | --- | --- |
-| **Planejamento** | **aprovada** | Orquestrador → Planejador / Revisor | `main` / `develop` | — | Escopo v2 consolidado (`planejamento2.md`) e Gate S0 aprovado. |
-| **Implementação** | **em andamento** | Dev 1–4 + Implementador | `develop` | `31bab5d` | S1-T1, S1-T2 e S1-T4 concluídas e integradas em `develop`. Próxima task da Sprint 1: S1-T3. |
+| **Planejamento** | **aprovada** | Orquestrador → Planejador / Revisor | `main` / `develop` | — | Escopo unificado e consolidado em `docs/PLAN.md` como fonte única da verdade (duplicidade com `planejamento2.md` removida) e Gate S0 aprovado. |
+| **Implementação** | **em andamento** | Dev 1–4 + Implementador | `develop` / `feature/s2-t5-router-node1-node2` | `31bab5d` | S1-T1, S1-T2 e S1-T4 concluídas e integradas em `develop`. S2-T5 em andamento na branch `feature/s2-t5-router-node1-node2` com diretrizes orçamentárias e de segurança alinhadas. |
 | **Validação** | **não iniciada** | Dev 1–4 + Revisor | — | — | Reserva obrigatória de US$ 7,50 (30% dos US$ 25 da Featherless) preservada para os testes finais com modelos reais, ensaio e Demo Day. |
 
 ---
@@ -21,12 +21,12 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 
 | Sprint / Task | Fase | Estado | Responsável (Dev + Agente) | Branch Prevista | Último Commit | Dependências / Observações |
 | --- | --- | --- | --- | --- | --- | --- |
-| **S0-T0** Planejamento v2 e Gate S0 | Planejamento | **aprovada** | Dev 1 + Planejador / Revisor | `main` / `develop` | — | Sem bloqueios de arquitetura; decisões de `planejamento2.md` aplicadas. |
+| **S0-T0** Planejamento Unificado e Gate S0 | Planejamento | **aprovada** | Dev 1 + Planejador / Revisor | `main` / `develop` | — | Sem bloqueios de arquitetura; planejamento único consolidado em `docs/PLAN.md`. |
 | **S1-T1** PostgreSQL, Modelos SQL e Contratos Pydantic v2 | Implementação | **aprovada** | Dev 1 + Implementador / Revisor | `develop` (via PR #1) | `0afa816` | Postgres, modelos SQLAlchemy 2.0, schemas Pydantic v2 com run_id e seed concluídos e auditados (97.6% cobertura). |
 | **S1-T2** Cliente LLM (Mock/Featherless), Custo, Guardrails, LGPD e Langfuse | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `develop` (via PR #2) | `04da421` | Cliente LLM unificado, controle de orçamento com corte preventivo, guardrails de prompt injection, mascaramento LGPD e Langfuse aprovados (46 testes, 92.48% cobertura). |
 | **S1-T3** Fluxo B — Nó S (Coletor/Validador Periódico via APScheduler) | Implementação | **não iniciada** | Dev 4 + Implementador / Revisor | `feature/s1-t3-node-s-scheduler` | — | Depende de S1-T1, S1-T2. Grava apenas prestadores que confirmaram contato. |
 | **S1-T4** Shell Frontend Estilo Airbnb (Imóveis, Chat Único e Sessão ADM) | Implementação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR) | `34c8c58` | Casca completa em React + TypeScript + Vite estilo Airbnb (listagem, calendário, chat e sessão ADM) integrada em develop. |
-| **S2-T5** Roteador Barato + Nó 1 (Comercial) + Nó 2 (Validador) | Implementação | **não iniciada** | Dev 1 + Implementador / Revisor | `feature/s2-t5-router-node1-node2` | — | Depende de S1-T1, S1-T2. Chat único roteia dúvida → Nó 1 e problema → Nó 2. |
+| **S2-T5** Roteador Barato + Nó 1 (Comercial) + Nó 2 (Validador) | Implementação | **em andamento** | Dev 1 + Implementador / Revisor | `feature/s2-t5-router-node1-node2` | — | Depende de S1-T1, S1-T2. Chat único roteia dúvida → Nó 1 e problema → Nó 2. Diretrizes alinhadas: regra custo zero de chamado aberto no Roteador, validação de datas no Nó 1, schema Pydantic no Nó 2 e contabilidade garantida no ledger. |
 | **S2-T6** Fluxo C — Nó 3 (Resolvedor em LangGraph + Urgência × Agenda) | Implementação | **não iniciada** | Dev 3 + Implementador / Revisor | `feature/s2-t6-node3-langgraph-resolver` | — | Depende de S1-T1, S1-T2, S1-T3. Implementa os 5 passos, `interrupt` ADM e loops. |
 | **S2-T7** Integração Frontend (Sessão Agente ⇄ Anfitrião + Simulador) | Implementação | **não iniciada** | Dev 2 + Implementador / Revisor | `feature/s2-t7-frontend-integration` | — | Depende de S1-T4, S2-T5, S2-T6. Conecta UI às APIs e aprovação humana. |
 | **S2-T8** Testes de Integração (Caminhos Alternativos) e Suíte de Segurança | Validação | **não iniciada** | Dev 4 + Implementador / Revisor | `feature/s2-t8-integration-security-tests` | — | Depende de S2-T5, S2-T6. Cobre timeouts, recusa de data, sem prestador e injection. |
@@ -39,12 +39,15 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 
 ## 3. Decisões Confirmadas e Diretrizes Ativas
 
-1. **Orçamento e Estratégia Mock-First:** Os US$ 25,00 na Featherless são exclusivos para os agentes de negócio do produto (reserva obrigatória de 30% = US$ 7,50 para a S3; teto de US$ 17,50 antes disso). Durante o desenvolvimento e testes de unidade/integração, usa-se `LLM_MODE=mock`; os modelos reais entram na etapa final.
-2. **Arquitetura de 3 Fluxos + Roteador de Chat Único:**
+1. **Unificação do Planejamento:** `docs/PLAN.md` é a **fonte única da verdade** oficial do projeto para escopo, arquitetura, fluxos e sprints. Arquivos transitórios de planejamento foram consolidados e removidos para eliminar duplicidades.
+2. **Orçamento e Estratégia Mock-First:** Os US$ 25,00 na Featherless são exclusivos para os agentes de negócio do produto (reserva obrigatória de 30% = US$ 7,50 para a S3; teto de US$ 17,50 antes disso). Durante o desenvolvimento e testes de unidade/integração, usa-se `LLM_MODE=mock`; os modelos reais entram na etapa final.
+3. **Ledger de Custos e Contabilidade Preventiva:** Chamadas a `app.core.llm.generate` obrigatoriamente registram gasto no ledger (DB e acumulador em memória), garantindo que os limites preventivos de corte por run (`MAX_COST_PER_RUN_USD = US$ 0,03`) e global (`US$ 25,00`) sejam aplicados com precisão.
+4. **Arquitetura de 3 Fluxos + Roteador de Chat Único:**
    - Ponto único de chat no imóvel com roteador barato (`dúvida → Nó 1` / `problema de inquilino ou camareira → Nó 2`).
-   - **Fluxo A (Aquisição):** Nó 1 atende até a reserva confirmada ("temos inquilino").
+   - O Roteador checa primeiro chamados abertos de manutenção no imóvel para encaminhar diretamente ao Nó 2 com custo zero (sem chamada a LLM).
+   - **Fluxo A (Aquisição):** Nó 1 atende até a reserva confirmada ("temos inquilino"), checando disponibilidade de datas na agenda antes de criar o `Booking` e mantendo o contrato `ChatMessageOutput`.
    - **Fluxo B (Coleta Periódica):** Nó S roda via `APScheduler`, valida contato dos prestadores e salva apenas os confirmados no PostgreSQL.
-   - **Fluxo C (Manutenção):** Nó 2 gera ticket Pydantic → Nó 3 (LangGraph) pede orçamentos (sem negociar preço) → notifica o ADM na **sessão Agente ⇄ Anfitrião do imóvel** → ADM escolhe o prestador → Nó 3 propõe data conforme **urgência × agenda** → prestador confirma (se recusar, volta ao passo 3) → avisa inquilino se estiver hospedado.
-3. **Stack Técnica:** Python 3.12, FastAPI, Pydantic v2, LangGraph (no Nó 3), APScheduler, PostgreSQL, React + TypeScript, Langfuse, cobertura mínima de **70% no código novo**.
-4. **Desafio Tako:** Não concorre (foco 100% em imóveis de temporada).
-5. **LGPD:** Telefones de prestadores e dados pessoais de hóspedes ficam apenas no PostgreSQL e são mascarados antes de logs e traces do Langfuse.
+   - **Fluxo C (Manutenção):** Nó 2 gera ticket Pydantic estruturado (`response_format`) → Nó 3 (LangGraph) pede orçamentos (sem negociar preço) → notifica o ADM na **sessão Agente ⇄ Anfitrião do imóvel** → ADM escolhe o prestador → Nó 3 propõe data conforme **urgência × agenda** → prestador confirma (se recusar, volta ao passo 3) → avisa inquilino se estiver hospedado.
+5. **Stack Técnica:** Python 3.12, FastAPI, Pydantic v2, LangGraph (no Nó 3), APScheduler, PostgreSQL, React + TypeScript, Langfuse, cobertura mínima de **70% no código novo**.
+6. **Desafio Tako:** Não concorre (foco 100% em imóveis de temporada).
+7. **LGPD:** Telefones de prestadores e dados pessoais de hóspedes ficam apenas no PostgreSQL e são mascarados antes de logs e traces do Langfuse.

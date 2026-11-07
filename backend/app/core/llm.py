@@ -263,18 +263,17 @@ async def generate(
         else:
             parsed = None
 
-    # 6. Persistência de custo no banco de dados se fornecido
-    if db is not None:
-        record_call_cost(
-            db=db,
-            run_id=run_id,
-            node=node,
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost_usd=cost_usd,
-            is_mock=is_mock,
-        )
+    # 6. Persistência de custo no banco de dados e acumulador em memória
+    record_call_cost(
+        db=db,
+        run_id=run_id,
+        node=node,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+        is_mock=is_mock,
+    )
 
     # 7. Telemetria e Spans no Langfuse com mascaramento e custo explícito
     langfuse_client.record_generation(

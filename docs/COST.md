@@ -1,6 +1,6 @@
 # Estimativa e Controle de Custo (`COST.md`)
 
-Atualizado em: `2026-11-07` (alinhado ao `planejamento2.md`).
+Atualizado em: `2026-11-07` (alinhado a `docs/PLAN.md`).
 
 ---
 
