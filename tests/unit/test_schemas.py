@@ -1,4 +1,6 @@
+import re
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -11,6 +13,7 @@ from app.schemas.common import (
     QuoteStatus,
     ReportedByRole,
     RouteDestination,
+    TicketStatus,
     TicketUrgency,
     mask_phone,
 )
@@ -18,6 +21,7 @@ from app.schemas.cost import CostRecordCreate, CostSummary
 from app.schemas.property import PropertyCreate, PropertyRead
 from app.schemas.provider import ProviderCreate, ProviderRead
 from app.schemas.quote import QuoteCreateRequest, QuoteResponseCreate
+from app.schemas.resolver import ResolutionRequest, ResolverStarter
 from app.schemas.ticket import TicketApprovalRequest, TicketCreateRequest
 
 
@@ -214,3 +218,28 @@ def test_audit_and_cost_schemas() -> None:
         alert_triggered=None,
     )
     assert summary.percentage_used == 0.02
+
+
+def test_ticket_status_matches_plan_state_machine() -> None:
+    """O enum TicketStatus deve ter exatamente os estados do diagrama em docs/PLAN.md §3."""
+    plan = Path(__file__).resolve().parents[2] / "docs" / "PLAN.md"
+    diagram = plan.read_text(encoding="utf-8").split("stateDiagram-v2", 1)[1].split("```", 1)[0]
+    transitions = re.findall(r"^\s*(\S+)\s*-->\s*([^:\s]+)", diagram, flags=re.MULTILINE)
+    plan_states = {state for pair in transitions for state in pair} - {"[*]"}
+    assert plan_states == {status.name for status in TicketStatus}
+
+
+def test_resolution_request_requires_run_id_and_starter_protocol() -> None:
+    with pytest.raises(ValidationError):
+        ResolutionRequest(ticket_id="t-1", property_id="p-1", run_id="")
+
+    started: list[ResolutionRequest] = []
+
+    class FakeResolver:
+        def start_resolution(self, request: ResolutionRequest) -> None:
+            started.append(request)
+
+    resolver = FakeResolver()
+    assert isinstance(resolver, ResolverStarter)
+    resolver.start_resolution(ResolutionRequest(ticket_id="t-1", property_id="p-1", run_id="r-1"))
+    assert started[0].run_id == "r-1"

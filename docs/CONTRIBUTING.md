@@ -54,7 +54,7 @@ Este documento define as regras de estrutura de pastas, branches, commits, PRs, 
 
 - **Isolamento de Arquivos:** Tasks que tocam os mesmos arquivos **não podem** ser paralelizadas entre desenvolvedores. O `docs/PLAN.md` explicita os diretórios/arquivos reservados para cada task.
 - **Contratos e Configurações Compartilhadas:** Alterações em contratos Pydantic (`backend/app/schemas/`), modelos de banco (`backend/app/db/`), configurações globais (`pyproject.toml`, `package.json`, `.env.example`) só podem ocorrer por meio de **task dedicada**. Caso um Implementador identifique necessidade de alterar um contrato compartilhado fora da sua task, deve registrar o bloqueio em `docs/STATUS.md` e devolver ao Planejador.
-- **Atualização do `docs/STATUS.md`:** Feita de forma atômica no início e no fim de cada transição de task para evitar conflitos de merge.
+- **Atualização do `docs/STATUS.md`:** A versão canônica é a de `develop` (a de `main` só é atualizada no merge `develop → main`). Feita de forma atômica no início e no fim de cada transição de task para evitar conflitos de merge.
 - **Procedimento em Caso de Conflito:** O dono da branch executa `git fetch origin && git rebase origin/develop`, resolve o conflito preservando os contratos aprovados, reexecuta toda a bateria de testes e submete novamente ao Revisor. Nunca usar `--ours` ou `--theirs` cegamente.
 
 ---

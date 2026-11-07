@@ -13,6 +13,7 @@ Atualizado em: `2026-11-07` (alinhado ao `planejamento2.md`).
   - [`Qwen/Qwen3.5-4B`](https://featherless.ai/models/Qwen/Qwen3.5-4B): **US$ 0,10 entrada / US$ 0,20 saída**
   - [`Qwen/Qwen3.5-9B`](https://featherless.ai/models/Qwen/Qwen3.5-9B): **US$ 0,17 entrada / US$ 0,25 saída**
   - [`Qwen/Qwen3.5-27B`](https://featherless.ai/docs/request-pricing-and-credits) (apenas fallback): **US$ 0,30 entrada / US$ 2,40 saída**
+  - **Conferido em 2026-11-07** nas páginas dos modelos e em https://featherless.ai/pricing: cobrança **por token** contra saldo pré-pago (plano Developer); só requisições bem-sucedidas são cobradas; saldo zerado bloqueia a API. O `Qwen3.5-4B` tem preço de entrada em cache de **US$ 0,02/1M** (prefixos reaproveitados de ~1.000+ tokens). Contexto máximo dos três modelos: **32k**. Unidades de concorrência: 4B = 1, 9B = 1, 27B = 2.
   - *Nota sobre modalidade de cobrança:* Caso a chave da Featherless opere sob plano de capacidade fixa (concorrência em vez de desconto por token), o ledger interno do sistema continuará calculando o custo equivalente em dólares por token **e** aplicará semáforo de limite de concorrência (`MAX_CONCURRENT_LLM_REQUESTS`, ex.: 2 a 4 chamadas simultâneas) e rate limit por minuto.
 
 ---
@@ -73,7 +74,7 @@ Todos os recursos externos operam em camada gratuita ou simulada no MVP, com tet
 
 | Recurso Externo | Uso no Produto | Estratégia no Hackathon / MVP | Orçamento Alocado | Limite de Segurança |
 | --- | --- | --- | ---: | --- |
-| **Google Places API** | Extração periódica de prestadores por categoria/região no Nó S | DB já inicia pré-populado para o MVP; chamadas reais à Places API usam crédito gratuito do Google Cloud (Text Search / Nearby Search) apenas em jobs controlados | **US$ 0,00** (Free Tier) | Máx. 50 chamadas no hackathon (`MAX_PLACES_CALLS=50`), com cache em banco |
+| **Google Places API** | Extração periódica de prestadores por categoria/região no Nó S | DB já inicia pré-populado e o Nó S usa **fixture** no MVP; a Places API real é extra. Exige projeto no Google Cloud **com conta de faturamento ativa**; a gratuidade é uma cota mensal por SKU (Text Search / Nearby Search), então chamadas acima da cota são cobradas | **US$ 0,00** (Free Tier) | Máx. 50 chamadas no hackathon (`MAX_PLACES_CALLS=50`), com cache em banco |
 | **Canal de Mensagens (Hóspede, Camareira, Prestador, ADM)** | Chat estilo Airbnb no imóvel + sessão exclusiva Agente ⇄ Anfitrião (ADM) + simulador de prestadores | Simulado integralmente na interface web do sistema (PostgreSQL + WebSockets/polling). Sem cobrança por mensagem | **US$ 0,00** | Allowlist obrigatória caso algum webhook externo de teste seja habilitado |
 | **Hospedagem e Banco de Dados (PostgreSQL)** | Link testável da submissão + persistência de tickets, prestadores, agenda e checkpoints LangGraph | Docker Compose em desenvolvimento; deploy em camada gratuita (Render / Railway / Fly.io + Neon / Supabase Free Tier) | **US$ 0,00** (Free Tier) | Monitorar conexões e armazenamento do plano gratuito |
 
@@ -83,7 +84,7 @@ Todos os recursos externos operam em camada gratuita ou simulada no MVP, com tet
 
 Soma base de uma rodada completa (1 Fluxo A + 1 job Fluxo B + 1 ticket Fluxo C) = **US$ 0,002069**.
 
-| Cenário | Premissas consideraras | Custo Fluxo C (Manutenção) | Custo Rodada Completa (A+B+C) |
+| Cenário | Premissas consideradas | Custo Fluxo C (Manutenção) | Custo Rodada Completa (A+B+C) |
 | --- | --- | ---: | ---: |
 | **Otimista** | Sem retries, 1 turno de esclarecimento no Nó 2, prestador aceita a 1ª data proposta | US$ 0,001127 | **US$ 0,002069** |
 | **Esperado** | +20% de tokens por conversa mais longa, 1 lembrete de timeout e 1 retry médio de schema | US$ 0,001352 | **US$ 0,002483** |
@@ -144,10 +145,10 @@ Critério de qualidade: validar com exemplos em português garantindo ≥95% de 
   - Teto por execução (`MAX_COST_PER_RUN_USD`): **US$ 0,03** por `run_id`
   - Tetos por Sprint: **S0 = US$ 0,50**, **S1 = US$ 2,00**, **S2 = US$ 15,00** (soma pré-reserva ≤ US$ 17,50), **S3 = US$ 7,50** (reserva exclusiva)
   - Teto global (`MAX_COST_GLOBAL_USD`): **US$ 25,00**
-- **Alertas automáticos (log estruturado + badge no painel do ADM):**
-  - **50%** do orçamento (US$ 12,50 global ou 50% da sprint atual)
-  - **75%** do orçamento (US$ 18,75 global ou 75% da sprint atual)
-  - **90%** do orçamento (US$ 22,50 global ou 90% da sprint atual)
+- **Alertas automáticos (log estruturado + badge no painel do ADM):** calculados sobre o **envelope ativo**, não sobre os US$ 25, para disparar antes de invadir a reserva:
+  - Antes da S3 (envelope de desenvolvimento US$ 17,50): **50%** = US$ 8,75 · **75%** = US$ 13,13 · **90%** = US$ 15,75 · **100%** = US$ 17,50 (corte; a reserva fica intocada).
+  - Na S3 (reserva US$ 7,50 liberada): **50%** = US$ 3,75 · **75%** = US$ 5,63 · **90%** = US$ 6,75 · **100%** = US$ 7,50.
+  - Também por sprint: 50/75/90% do teto da sprint atual.
   - **100%:** bloqueio imediato (`BudgetExceededError`) com fallback gracioso no painel.
 - **Preços da Featherless no Langfuse (obrigatório):**
   - Como os modelos da Featherless não possuem tabela nativa de preços no Langfuse, o sistema deve:

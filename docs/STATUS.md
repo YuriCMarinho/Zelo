@@ -3,6 +3,7 @@
 Atualizado em: `2026-11-07` (alinhado ao `planejamento2.md`).
 
 Estados permitidos: **não iniciada** | **em andamento** | **em revisão** | **aprovada** | **bloqueada**.
+**Versão canônica: a de `develop`.** As cópias em `main` e nas branches de task podem estar defasadas; leia sempre `git show origin/develop:docs/STATUS.md`.
 Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-lo ao iniciar e ao concluir seu trabalho.
 
 ---
@@ -26,10 +27,11 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | **S1-T2** Cliente LLM (Mock/Featherless), Custo, Guardrails, LGPD e Langfuse | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `develop` (via PR #2) | `04da421` | Cliente LLM unificado, controle de orçamento com corte preventivo, guardrails de prompt injection, mascaramento LGPD e Langfuse aprovados (46 testes, 92.48% cobertura). |
 | **S1-T3** Fluxo B — Nó S (Coletor/Validador Periódico via APScheduler) | Implementação | **não iniciada** | Dev 4 + Implementador / Revisor | `feature/s1-t3-node-s-scheduler` | — | Depende de S1-T1, S1-T2. Grava apenas prestadores que confirmaram contato. |
 | **S1-T4** Shell Frontend Estilo Airbnb (Imóveis, Chat Único e Sessão ADM) | Implementação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR) | `34c8c58` | Casca completa em React + TypeScript + Vite estilo Airbnb (listagem, calendário, chat e sessão ADM) integrada em develop. |
-| **S2-T5** Roteador Barato + Nó 1 (Comercial) + Nó 2 (Validador) | Implementação | **não iniciada** | Dev 1 + Implementador / Revisor | `feature/s2-t5-router-node1-node2` | — | Depende de S1-T1, S1-T2. Chat único roteia dúvida → Nó 1 e problema → Nó 2. |
-| **S2-T6** Fluxo C — Nó 3 (Resolvedor em LangGraph + Urgência × Agenda) | Implementação | **não iniciada** | Dev 3 + Implementador / Revisor | `feature/s2-t6-node3-langgraph-resolver` | — | Depende de S1-T1, S1-T2, S1-T3. Implementa os 5 passos, `interrupt` ADM e loops. |
+| **S1-T13** Ajuste de Contratos (TicketStatus, Nó 2 → Nó 3) e Correção dos Docs | Implementação | **em revisão** | Dev 1 + Planejador / Revisor | `fix/s1-t13-ticket-contract-docs` | — | Depende de S1-T1. Precede a S2 (bloqueia S2-T5 e S2-T6). Paralela à S1-T3. |
+| **S2-T5** Roteador Barato + Nó 1 (Comercial) + Nó 2 (Validador) | Implementação | **não iniciada** | Dev 1 + Implementador / Revisor | `feature/s2-t5-router-node1-node2` | — | Depende de S1-T1, S1-T2, S1-T13. Chat único roteia dúvida → Nó 1 e problema → Nó 2; aciona o Nó 3 via `ResolverStarter`. |
+| **S2-T6** Fluxo C — Nó 3 (Resolvedor em LangGraph + Urgência × Agenda) | Implementação | **não iniciada** | Dev 3 + Implementador / Revisor | `feature/s2-t6-node3-langgraph-resolver` | — | Depende de S1-T1, S1-T2, S1-T3, S1-T13. Implementa os 5 passos, `interrupt` ADM e loops. |
 | **S2-T7** Integração Frontend (Sessão Agente ⇄ Anfitrião + Simulador) | Implementação | **não iniciada** | Dev 2 + Implementador / Revisor | `feature/s2-t7-frontend-integration` | — | Depende de S1-T4, S2-T5, S2-T6. Conecta UI às APIs e aprovação humana. |
-| **S2-T8** Testes de Integração (Caminhos Alternativos) e Suíte de Segurança | Validação | **não iniciada** | Dev 4 + Implementador / Revisor | `feature/s2-t8-integration-security-tests` | — | Depende de S2-T5, S2-T6. Cobre timeouts, recusa de data, sem prestador e injection. |
+| **S2-T8** Testes de Integração (Caminhos Alternativos) e Suíte de Segurança | Implementação | **não iniciada** | Dev 4 + Implementador / Revisor | `feature/s2-t8-integration-security-tests` | — | Depende de S2-T5, S2-T6. Cobre timeouts, recusa de data, sem prestador e injection. |
 | **S3-T9** Testes E2E com Modelos Reais (Featherless) e Recalibração de Custo | Validação | **não iniciada** | Dev 1 + Implementador / Revisor | `fix/s3-t9-real-llm-e2e` | — | Depende de S2 concluída. Ativa modelos reais pagos e atualiza `docs/COST.md`. |
 | **S3-T10** Deploy do Link Testável + Seed/Reset para Avaliadores | Validação | **não iniciada** | Dev 2 + Implementador / Revisor | `feature/s3-t10-deploy-link` | — | Depende de S2 concluída. |
 | **S3-T11** Roteiro, Gravação do Vídeo e Material do Pitch (Demo Day) | Validação | **não iniciada** | Dev 3 + Implementador / Revisor | `docs/s3-t11-pitch-video` | — | Depende de S2 concluída. |
