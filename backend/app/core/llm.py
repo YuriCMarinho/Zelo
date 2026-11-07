@@ -145,13 +145,13 @@ def _generate_mock_content(node: str, messages: list[dict[str, str]]) -> str:
             return "Classificação: MANUTENÇÃO (encaminhado ao Nó 2 — Validador)."
         return "Classificação: COMERCIAL (encaminhado ao Nó 1 — Comercial)."
 
-    if node == "commercial":
+    if node in ("commercial", "commercial_node1"):
         return (
             "Olá! Seja muito bem-vindo ao nosso imóvel. Temos wi-fi de alta velocidade, "
             "cozinha completa e excelente localização. Deseja confirmar as datas da sua estadia?"
         )
 
-    if node in ("validator", "triage"):
+    if node in ("validator", "validator_node2", "triage"):
         return (
             "Recebemos o relato de manutenção. Os detalhes foram classificados e encaminhados "
             "ao Nó 3 para cotação com prestadores validados."
@@ -263,18 +263,17 @@ async def generate(
         else:
             parsed = None
 
-    # 6. Persistência de custo no banco de dados se fornecido
-    if db is not None:
-        record_call_cost(
-            db=db,
-            run_id=run_id,
-            node=node,
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost_usd=cost_usd,
-            is_mock=is_mock,
-        )
+    # 6. Persistência de custo no banco de dados e acumulador em memória
+    record_call_cost(
+        db=db,
+        run_id=run_id,
+        node=node,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+        is_mock=is_mock,
+    )
 
     # 7. Telemetria e Spans no Langfuse com mascaramento e custo explícito
     langfuse_client.record_generation(

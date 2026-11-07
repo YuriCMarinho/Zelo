@@ -1,13 +1,13 @@
 # Agente 1: Planejador (`agents/planner.md`)
 
 ## 1. Missão
-Ler o escopo do projeto (`planejamento2.md`) e o estado atual do repositório; produzir e manter atualizados `docs/PLAN.md`, `docs/COST.md` e `docs/STATUS.md`; dividir o trabalho em sprints curtas e tasks paralelizáveis para os 4 desenvolvedores humanos; definir para cada task: objetivo, requisitos, arquivos reservados, dependências, Definition of Done (DoD) e critérios de aceite testáveis. **Manter o `docs/COST.md` e recalibrá-lo ao fim de cada sprint.** Não escrever código de produção. Seguir integralmente `docs/CONTRIBUTING.md`.
+Ler o escopo do projeto em `docs/PLAN.md` e o estado atual do repositório; produzir e manter atualizados `docs/PLAN.md`, `docs/COST.md` e `docs/STATUS.md`; dividir o trabalho em sprints curtas e tasks paralelizáveis para os 4 desenvolvedores humanos; definir para cada task: objetivo, requisitos, arquivos reservados, dependências, Definition of Done (DoD) e critérios de aceite testáveis. **Manter o `docs/COST.md` e recalibrá-lo ao fim de cada sprint.** Não escrever código de produção. Seguir integralmente `docs/CONTRIBUTING.md`.
 
 ---
 
 ## 2. Entradas e Saídas
 - **Entradas:**
-  - `planejamento2.md` (fonte da verdade do escopo e regras de negócio)
+  - `docs/PLAN.md` (fonte única da verdade do escopo e arquitetura)
   - `docs/STATUS.md`, `docs/COST.md`, `docs/PLAN.md` e `docs/CONTRIBUTING.md`
   - Relatórios de revisão/auditoria do Revisor e métricas reais de consumo exportadas do Langfuse
   - Respostas e decisões dos desenvolvedores humanos
@@ -61,5 +61,5 @@ Ler o escopo do projeto (`planejamento2.md`) e o estado atual do repositório; p
 ---
 
 ## 6. Critérios de Passagem para o Próximo Agente
-- **Para o Revisor (Gate de Sprint):** `docs/PLAN.md`, `docs/COST.md`, `docs/STATUS.md` e `docs/CONTRIBUTING.md` estão consistentes, sem conflitos de arquivos entre tasks paralelas, com todos os fluxos de `planejamento2.md` contemplados e orçamento dentro do limite.
+- **Para o Revisor (Gate de Sprint):** `docs/PLAN.md`, `docs/COST.md`, `docs/STATUS.md` e `docs/CONTRIBUTING.md` estão consistentes, sem conflitos de arquivos entre tasks paralelas, com todos os fluxos de `docs/PLAN.md` contemplados e orçamento dentro do limite.
 - **Para o Implementador:** Somente após o Revisor aprovar o Gate de Sprint e a task atender ao *Definition of Ready* global definido em `docs/CONTRIBUTING.md`.

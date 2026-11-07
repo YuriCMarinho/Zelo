@@ -1,6 +1,6 @@
 # Guia de Contribuição e Organização do Repositório (`CONTRIBUTING.md`)
 
-Atualizado em: `2026-11-07` (fonte da verdade: `planejamento2.md`).
+Atualizado em: `2026-11-07` (fonte da verdade: `docs/PLAN.md`).
 
 Este documento define as regras de estrutura de pastas, branches, commits, PRs, resolução de conflitos e critérios de prontidão/conclusão para os **4 desenvolvedores humanos** e os **3 agentes de IA de desenvolvimento** (Planejador, Implementador e Revisor/Auditor).
 
