@@ -10,12 +10,13 @@ Este documento define as regras de estrutura de pastas, branches, commits, PRs, 
 
 ```text
 /
-├── agents/         # Instruções operacionais dos 3 agentes de dev (planner.md, implementer.md, reviewer.md)
-├── backend/        # Aplicação Python 3.12 (FastAPI, Pydantic v2, LangGraph, APScheduler, SQLAlchemy)
-├── frontend/       # Aplicação React + TypeScript + Vite (interface estilo Airbnb + sessão Agente ⇄ ADM)
-├── docs/           # Documentação viva (PLAN.md, COST.md, STATUS.md, CONTRIBUTING.md, PITCH.md, etc.)
-├── infra/          # Docker Compose (PostgreSQL), Dockerfiles, seeds de demo e scripts de deploy
-└── tests/          # Testes unitários, integração (caminhos alternativos), segurança (injection/LGPD) e E2E
+├── agents/              # Instruções operacionais dos 3 agentes de dev (planner.md, implementer.md, reviewer.md)
+├── backend/             # Aplicação Python 3.12 (FastAPI, Pydantic v2, LangGraph, APScheduler, SQLAlchemy)
+├── frontend/            # Aplicação React + TypeScript + Vite (interface Zelo estilo Airbnb + sessão Agente ⇄ ADM)
+├── frontend-referencias/# Fonte OBRIGATÓRIA de referência para design, UI, mockups e identidade visual
+├── docs/                # Documentação viva (PLAN.md, COST.md, STATUS.md, CONTRIBUTING.md, PITCH.md, etc.)
+├── infra/               # Docker Compose (PostgreSQL), Dockerfiles, seeds de demo e scripts de deploy
+└── tests/               # Testes unitários, integração (caminhos alternativos), segurança (injection/LGPD) e E2E
 ```
 
 ---
