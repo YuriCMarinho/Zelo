@@ -7,11 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.providers import router as providers_router
 from app.core.config import settings
 from app.db.base import Base
 from app.db.models import MaintenanceTicket, Property
 from app.db.seed import run_seed
 from app.db.session import engine, get_db
+from app.scheduler.provider_jobs import create_provider_scheduler
 from app.schemas.property import PropertyRead
 from app.schemas.ticket import MaintenanceTicketRead
 
@@ -25,7 +27,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         run_seed()
     except Exception as e:
         print(f"Aviso durante seed de inicialização: {e}")
-    yield
+    scheduler = None
+    if settings.environment != "testing":
+        scheduler = create_provider_scheduler()
+        scheduler.start()
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -42,6 +52,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(providers_router)
 
 
 @app.get("/health", tags=["Saúde"])
