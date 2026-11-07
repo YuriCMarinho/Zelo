@@ -7,7 +7,7 @@ export function parseRoute(pathname: string, search: string): Route {
   const match = /^\/imoveis\/([^/]+)\/?$/.exec(pathname)
   if (!match?.[1] || !properties.some((property) => property.id === match[1])) return { view: 'listing' }
   const requested = new URLSearchParams(search).get('aba')
-  const tab: PropertyTab = requested === 'chat' || requested === 'adm' ? requested : 'visao-geral'
+  const tab: PropertyTab = requested === 'chat' || requested === 'adm' || requested === 'orcamentos' ? requested : 'visao-geral'
   return { view: 'property', propertyId: match[1], tab }
 }
 
