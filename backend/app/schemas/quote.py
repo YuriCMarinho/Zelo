@@ -36,3 +36,5 @@ class QuoteResponseCreate(BaseSchema):
 class QuoteRead(QuoteBase):
     id: str
     created_at: datetime
+    provider_name: str | None = None
+    provider_rating: float | None = None
