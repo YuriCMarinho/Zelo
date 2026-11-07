@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     langfuse_host: str = "https://cloud.langfuse.com"
     max_cost_per_run_usd: float = 0.03
     max_cost_global_usd: float = 25.00
+    google_places_api_key: str = ""
+    provider_source: str = "fixture"
+    provider_contact_allowlist: str = ""
+    provider_simulated_replies: str = "{}"
+    provider_collection_hours: int = 12
+    max_places_calls: int = 50
 
     model_config = SettingsConfigDict(
         env_file=".env",
