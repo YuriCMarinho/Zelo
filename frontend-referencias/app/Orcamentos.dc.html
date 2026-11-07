@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Comparativo de orçamentos</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#17323A}a:hover{color:#0E2026}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F6F3EE; color: #17323A; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column">
+
+<div style="padding: 24px 20px 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<button aria-label="Voltar" style="width: 44px; height: 44px; border: none; border-radius: 12px; background: rgba(23,50,58,0.08); display: flex; align-items: center; justify-content: center">
+<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 L8 12 L15 19" fill="none" stroke="#17323A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</button>
+<span style="padding: 7px 12px; border-radius: 999px; background: #F2A541; font-size: 13px; font-weight: 600">Aguardando sua decisão</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 14px; color: rgba(23,50,58,0.72)">Apto 302 · Cabo Branco · Banheiro</span>
+<h1 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.15; letter-spacing: -0.02em">Chuveiro sem água quente</h1>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; padding: 12px 14px; border-radius: 14px; background: rgba(23,50,58,0.08)">Pedimos orçamento a 5 eletricistas da região. 3 responderam. O hóspede já foi avisado de que estamos cuidando.</p>
+</div>
+
+<div style="flex-grow: 1; padding: 4px 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="background: #FFFFFF; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: inset 0 0 0 2px #17323A">
+<div style="display: flex; justify-content: space-between; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px">Carlos Eletricista</span>
+<span style="font-size: 13px; color: rgba(23,50,58,0.72)">4,9 · 128 avaliações · Recomendado</span>
+</div>
+<span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 22px; font-variant-numeric: tabular-nums">R$ 180</span>
+</div>
+<div style="display: flex; gap: 8px; font-size: 13px; font-weight: 500">
+<span style="padding: 6px 10px; border-radius: 999px; background: rgba(23,50,58,0.08)">Amanhã, 9h</span>
+<span style="padding: 6px 10px; border-radius: 999px; background: rgba(23,50,58,0.08)">Hóspede sai às 11h</span>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border-radius: 18px; padding: 16px; display: flex; justify-content: space-between; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px">Volt Reparos</span>
+<span style="font-size: 13px; color: rgba(23,50,58,0.72)">4,7 · 64 avaliações</span>
+<span style="font-size: 13px; font-weight: 500">Hoje, 17h</span>
+</div>
+<span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 22px">R$ 240</span>
+</div>
+
+<div style="background: #FFFFFF; border-radius: 18px; padding: 16px; display: flex; justify-content: space-between; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px">João Faz-Tudo</span>
+<span style="font-size: 13px; color: rgba(23,50,58,0.72)">4,5 · 21 avaliações</span>
+<span style="font-size: 13px; font-weight: 500">Sexta, 14h</span>
+</div>
+<span style="font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 22px">R$ 150</span>
+</div>
+</div>
+
+<div style="padding: 16px 20px 28px; display: flex; flex-direction: column; gap: 10px">
+<button style="min-height: 56px; border: none; border-radius: 16px; background: #17323A; color: #F6F3EE; font-family: Inter, sans-serif; font-size: 17px; font-weight: 600">Aprovar Carlos · R$ 180</button>
+<span style="text-align: center; font-size: 13px; color: rgba(23,50,58,0.72)">A Zelo agenda e avisa o hóspede. Nada é contratado sem você.</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
