@@ -12,7 +12,7 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | Fase | Estado | Responsável | Branch Atual | Último Commit | Bloqueios / Decisões Confirmadas |
 | --- | --- | --- | --- | --- | --- |
 | **Planejamento** | **aprovada** | Orquestrador → Planejador / Revisor | `main` / `develop` | — | Escopo v2 consolidado (`planejamento2.md`) e Gate S0 aprovado. |
-| **Implementação** | **em andamento** | Dev 1–4 + Implementador | `develop` | — | Iniciada a partir de `develop`. Desenvolvimento inicial 100% com mocks/simulações. |
+| **Implementação** | **em andamento** | Dev 1–4 + Implementador | `develop` | `31bab5d` | S1-T1, S1-T2 e S1-T4 concluídas e integradas em `develop`. Próxima task da Sprint 1: S1-T3. |
 | **Validação** | **não iniciada** | Dev 1–4 + Revisor | — | — | Reserva obrigatória de US$ 7,50 (30% dos US$ 25 da Featherless) preservada para os testes finais com modelos reais, ensaio e Demo Day. |
 
 ---
@@ -22,10 +22,10 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | Sprint / Task | Fase | Estado | Responsável (Dev + Agente) | Branch Prevista | Último Commit | Dependências / Observações |
 | --- | --- | --- | --- | --- | --- | --- |
 | **S0-T0** Planejamento v2 e Gate S0 | Planejamento | **aprovada** | Dev 1 + Planejador / Revisor | `main` / `develop` | — | Sem bloqueios de arquitetura; decisões de `planejamento2.md` aplicadas. |
-| **S1-T1** PostgreSQL, Modelos SQL e Contratos Pydantic v2 | Implementação | **aprovada** | Dev 1 + Implementador / Revisor | `feature/s1-t1-db-contracts` | `0afa816` | Postgres, modelos SQLAlchemy 2.0, schemas Pydantic v2 com run_id e seed concluídos e auditados (97.6% cobertura). |
-| **S1-T2** Cliente LLM (Mock/Featherless), Custo, Guardrails, LGPD e Langfuse | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `feature/s1-t2-llm-cost-security` | `04da421` | Cliente LLM unificado, controle de orçamento com corte preventivo, guardrails de prompt injection, mascaramento LGPD e Langfuse aprovados (46 testes, 92.48% cobertura). |
+| **S1-T1** PostgreSQL, Modelos SQL e Contratos Pydantic v2 | Implementação | **aprovada** | Dev 1 + Implementador / Revisor | `develop` (via PR #1) | `0afa816` | Postgres, modelos SQLAlchemy 2.0, schemas Pydantic v2 com run_id e seed concluídos e auditados (97.6% cobertura). |
+| **S1-T2** Cliente LLM (Mock/Featherless), Custo, Guardrails, LGPD e Langfuse | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `develop` (via PR #2) | `04da421` | Cliente LLM unificado, controle de orçamento com corte preventivo, guardrails de prompt injection, mascaramento LGPD e Langfuse aprovados (46 testes, 92.48% cobertura). |
 | **S1-T3** Fluxo B — Nó S (Coletor/Validador Periódico via APScheduler) | Implementação | **não iniciada** | Dev 4 + Implementador / Revisor | `feature/s1-t3-node-s-scheduler` | — | Depende de S1-T1, S1-T2. Grava apenas prestadores que confirmaram contato. |
-| **S1-T4** Shell Frontend Estilo Airbnb (Imóveis, Chat Único e Sessão ADM) | Implementação | **não iniciada** | Dev 2 + Implementador / Revisor | `feature/s1-t4-frontend-airbnb-shell` | — | Depende de S0-T0 (paralela à S1-T1). Cria `frontend/` do zero em React + TS. |
+| **S1-T4** Shell Frontend Estilo Airbnb (Imóveis, Chat Único e Sessão ADM) | Implementação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR) | `34c8c58` | Casca completa em React + TypeScript + Vite estilo Airbnb (listagem, calendário, chat e sessão ADM) integrada em develop. |
 | **S2-T5** Roteador Barato + Nó 1 (Comercial) + Nó 2 (Validador) | Implementação | **não iniciada** | Dev 1 + Implementador / Revisor | `feature/s2-t5-router-node1-node2` | — | Depende de S1-T1, S1-T2. Chat único roteia dúvida → Nó 1 e problema → Nó 2. |
 | **S2-T6** Fluxo C — Nó 3 (Resolvedor em LangGraph + Urgência × Agenda) | Implementação | **não iniciada** | Dev 3 + Implementador / Revisor | `feature/s2-t6-node3-langgraph-resolver` | — | Depende de S1-T1, S1-T2, S1-T3. Implementa os 5 passos, `interrupt` ADM e loops. |
 | **S2-T7** Integração Frontend (Sessão Agente ⇄ Anfitrião + Simulador) | Implementação | **não iniciada** | Dev 2 + Implementador / Revisor | `feature/s2-t7-frontend-integration` | — | Depende de S1-T4, S2-T5, S2-T6. Conecta UI às APIs e aprovação humana. |
