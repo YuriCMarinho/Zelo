@@ -21,7 +21,7 @@ from app.core.budget import (
 )
 from app.core.config import settings
 from app.demo.replay import replay
-from app.observability.langfuse_client import langfuse_client
+# langfuse_client é importado sob demanda em generate() para evitar circular import
 from app.observability.logger import logger
 
 # Modelos homologados na Featherless conforme docs/COST.md
@@ -300,6 +300,8 @@ async def generate(
     )
 
     # 7. Telemetria e Spans no Langfuse com mascaramento e custo explícito
+    from app.observability.langfuse_client import langfuse_client
+
     langfuse_client.record_generation(
         run_id=run_id,
         node=node,
