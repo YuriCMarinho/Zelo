@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -19,6 +20,7 @@ from app.observability.logger import logger
 from app.schemas.common import ProviderCategory
 from app.security.guardrails import SecurityViolationError, validate_untrusted_input
 from app.security.masking import mask_pii
+from app.services.provider_identity import normalized_phone, provider_identity
 
 PLACES_URL = "https://places.googleapis.com/v1/places:searchText"
 FIELD_MASK = "places.id,places.displayName,places.internationalPhoneNumber,places.rating"
@@ -170,7 +172,9 @@ class SimulatedContactGateway:
         self.sent: list[ValidationMessage] = []
 
     async def request_confirmation(self, candidate: ProviderCandidate, run_id: str) -> str | None:
-        if candidate.phone not in self.allowed_phones:
+        if normalized_phone(candidate.phone) not in {
+            normalized_phone(p) for p in self.allowed_phones
+        }:
             logger.warning("Contato fora da allowlist ignorado", extra={"run_id": run_id})
             return None
         self.sent.append(
@@ -273,9 +277,12 @@ class ProviderCollector:
                     continue
                 existing = db.scalar(
                     select(Provider).where(
-                        Provider.category == category.value,
-                        Provider.region == region.strip(),
-                        Provider.phone == candidate.phone,
+                        Provider.identity_key
+                        == provider_identity(
+                            category.value,
+                            region,
+                            candidate.phone,
+                        ),
                     )
                 )
                 if existing is not None and existing.is_validated:
@@ -302,9 +309,23 @@ class ProviderCollector:
                     source=candidate.source,
                 )
                 provider.is_validated = True
-                if existing is None:
-                    db.add(provider)
-                db.flush()
+                try:
+                    with db.begin_nested():
+                        if existing is None:
+                            db.add(provider)
+                        db.flush()
+                except IntegrityError:
+                    # Outra coleta pode ter confirmado a mesma identidade neste intervalo.
+                    duplicate = db.scalar(
+                        select(Provider).where(
+                            Provider.identity_key
+                            == provider_identity(category.value, region, candidate.phone),
+                        )
+                    )
+                    if duplicate is None:
+                        raise
+                    skipped += 1
+                    continue
                 provider_ids.append(provider.id)
                 confirmed += 1
                 db.add(
