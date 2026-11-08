@@ -203,6 +203,8 @@ async def generate(
     # 4. Estimativa preventiva e verificação de teto orçamentário
     # Em modo mock o custo real será 0.0, mas a verificação orçamentária é validada
     mode = settings.llm_mode.lower()
+    if mode == "real":
+        mode = "featherless"
     if mode not in {"mock", "recorded_demo", "featherless"}:
         raise ValueError(f"LLM_MODE inválido: '{mode}'.")
     is_mock_mode = mode == "mock"
