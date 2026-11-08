@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
@@ -26,6 +26,28 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const profileMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!profileMenuOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProfileMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [profileMenuOpen])
 
   const handleReset = async () => {
     setIsResetting(true)
@@ -44,7 +66,6 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
     { url: '/agentes', label: 'Grafo de Agentes', view: 'agentes' },
     { url: '/reservas', label: 'Reservas', view: 'reservas' },
     { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
-    { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
     { url: '/auditoria', label: 'Auditoria', view: 'auditoria' },
   ]
 
@@ -75,7 +96,45 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
           >
             ↻ Resetar Demo
           </button>
-          <div className="avatar" aria-label="Perfil do anfitrião">A</div>
+          <div className="profile-menu-container" ref={profileMenuRef}>
+            <button
+              type="button"
+              className={`avatar-btn ${profileMenuOpen ? 'open' : ''}`}
+              onClick={() => setProfileMenuOpen((prev) => !prev)}
+              aria-label="Perfil do anfitrião"
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+            >
+              <span className="avatar" aria-hidden="true">A</span>
+            </button>
+            {profileMenuOpen && (
+              <div className="profile-dropdown" role="menu" aria-label="Opções do perfil">
+                <div className="profile-dropdown-header">
+                  <span className="avatar avatar-sm" aria-hidden="true">A</span>
+                  <div className="profile-dropdown-user">
+                    <strong>Anfitrião</strong>
+                    <span>anfitriao@zelo.app</span>
+                  </div>
+                </div>
+                <div className="profile-dropdown-divider" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`profile-dropdown-item ${route.view === 'configuracoes' ? 'active' : ''}`}
+                  onClick={() => {
+                    setProfileMenuOpen(false)
+                    navigate('/configuracoes')
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <span>Configurações</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className={`mobile-menu-btn ${mobileMenuOpen ? 'open' : ''}`}
