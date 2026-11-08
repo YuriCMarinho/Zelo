@@ -6,17 +6,17 @@ Assim as duas tasks rodam em paralelo e se integram sem tocar nos arquivos uma d
 
 from typing import Protocol, runtime_checkable
 
-from pydantic import Field
-
-from app.schemas.common import BaseSchema
+from app.schemas.common import BaseSchema, NonBlankStr
 
 
 class ResolutionRequest(BaseSchema):
-    """Pedido para o Nó 3 iniciar a resolução de um ticket já persistido no banco."""
+    """Pedido para o Nó 3 iniciar a resolução de um ticket já persistido no banco.
 
-    ticket_id: str = Field(..., min_length=1)
-    property_id: str = Field(..., min_length=1)
-    run_id: str = Field(..., min_length=1, description="Mesmo run_id do ticket (auditoria)")
+    O imóvel e os demais dados vêm do próprio ticket (fonte única), não do pedido.
+    """
+
+    ticket_id: NonBlankStr
+    run_id: NonBlankStr  # mesmo run_id do ticket (auditoria ponta a ponta)
 
 
 @runtime_checkable

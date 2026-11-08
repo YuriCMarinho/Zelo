@@ -2,12 +2,15 @@ from app.schemas.audit import AuditEventCreate, AuditEventRead
 from app.schemas.booking import BookingBase, BookingCreate, BookingRead
 from app.schemas.chat import ChatMessageInput, ChatMessageOutput
 from app.schemas.common import (
+    TICKET_TRANSITIONS,
+    NonBlankStr,
     ProviderCategory,
     QuoteStatus,
     ReportedByRole,
     RouteDestination,
     TicketStatus,
     TicketUrgency,
+    is_valid_ticket_transition,
     mask_phone,
 )
 from app.schemas.cost import CostRecordCreate, CostRecordRead, CostSummary
@@ -31,6 +34,9 @@ __all__ = [
     "QuoteStatus",
     "RouteDestination",
     "mask_phone",
+    "NonBlankStr",
+    "TICKET_TRANSITIONS",
+    "is_valid_ticket_transition",
     "PropertyBase",
     "PropertyCreate",
     "PropertyRead",
