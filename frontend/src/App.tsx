@@ -21,41 +21,6 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
   return <img className="zelo-logo" src={transparent ? '/zelo-logo-transparent.svg' : '/zelo-logo.svg'} width={size} height={size} alt="Zelo" />
 }
 
-function HeroWaveTexture() {
-  return (
-    <svg
-      className="hero-waves-bg"
-      viewBox="0 0 1440 405"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
-      {/* Linha 1 (Superior): paralela externa com espaçamento uniforme */}
-      <path
-        d="M 970 405 C 1000 330, 1060 250, 1130 180 C 1200 120, 1270 120, 1330 65 C 1365 35, 1390 10, 1400 0"
-        stroke="rgba(246, 243, 238, 0.20)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      {/* Linha 2 (Central): traço guia cruzando a casa com ondulação para o canto superior direito */}
-      <path
-        d="M 1020 405 C 1050 330, 1110 260, 1180 200 C 1250 140, 1320 145, 1380 90 C 1410 60, 1430 25, 1440 10"
-        stroke="rgba(246, 243, 238, 0.26)"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      {/* Linha 3 (Inferior): paralela interna mantendo o espaçamento harmônico */}
-      <path
-        d="M 1070 405 C 1100 330, 1160 270, 1230 220 C 1300 160, 1370 170, 1430 115 C 1435 110, 1438 105, 1440 100"
-        stroke="rgba(246, 243, 238, 0.18)"
-        strokeWidth="2.0"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
@@ -200,7 +165,6 @@ function Listing({ navigate, propertiesList }: { navigate: (url: string) => void
   return (
     <main>
       <section className="hero">
-        <HeroWaveTexture />
         <div className="hero-inner">
           <div>
             <span className="eyebrow light">CUIDADO EM CADA DETALHE</span>
