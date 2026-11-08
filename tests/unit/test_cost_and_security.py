@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.core.budget import (
     BudgetExceededError,
+    active_budget_envelope,
     calculate_call_cost,
     check_budget_before_call,
     estimate_call_cost,
@@ -160,9 +161,7 @@ async def test_mock_mode_pydantic_structured_output() -> None:
     assert isinstance(resp.parsed, TicketCreateRequest)
     assert resp.parsed.run_id != ""
     assert resp.parsed.property_id != ""
-    valid_categories = {
-        "plumber", "electrician", "painter", "organizer", "general_maintenance"
-    }
+    valid_categories = {"plumber", "electrician", "painter", "organizer", "general_maintenance"}
     assert resp.parsed.category.value in valid_categories
 
 
@@ -224,8 +223,11 @@ def test_run_budget_ceiling_enforcement(db_session: Session) -> None:
 # ---------------------------------------------------------------------------
 # 7. Teto de orçamento global (corte em US$ 25.00)
 # ---------------------------------------------------------------------------
-def test_global_budget_ceiling_enforcement(db_session: Session) -> None:
+def test_global_budget_ceiling_enforcement(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verifica que ultrapassar o teto global de US$ 25.00 lança BudgetExceededError."""
+    monkeypatch.setattr(settings, "budget_reserve_unlocked", True)
     # Registra gasto acumulado de US$ 24.99
     record_call_cost(
         db=db_session,
@@ -249,6 +251,40 @@ def test_global_budget_ceiling_enforcement(db_session: Session) -> None:
 
     assert exc_info.value.scope == "global"
     assert "Custo global acumulado" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# 7b. Reserva obrigatória de 30%: corte no envelope ativo (docs/COST.md §7)
+# ---------------------------------------------------------------------------
+def test_reserve_blocks_spending_above_dev_envelope(db_session: Session) -> None:
+    """Antes da S3, o corte global acontece em US$ 17,50 e preserva a reserva de US$ 7,50."""
+    assert active_budget_envelope() == (0.0, 17.5)
+    record_call_cost(db_session, "run-env-01", "resolver", "Qwen/Qwen3.5-9B", 0, 0, 17.49, False)
+
+    with pytest.raises(BudgetExceededError) as exc_info:
+        check_budget_before_call(
+            run_id="run-env-02", estimated_cost=0.02, db=db_session, max_run_cost=1.00
+        )
+    assert exc_info.value.scope == "global"
+    assert exc_info.value.limit == pytest.approx(17.5)
+    assert get_cost_summary(db_session).budget_limit_usd == pytest.approx(17.5)
+
+
+def test_unlocked_reserve_allows_spending_and_alerts_on_reserve(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Com a reserva liberada (S3), o teto vira US$ 25 e os alertas medem só a reserva."""
+    monkeypatch.setattr(settings, "budget_reserve_unlocked", True)
+    assert active_budget_envelope() == (17.5, 25.0)
+    record_call_cost(db_session, "run-env-03", "resolver", "Qwen/Qwen3.5-9B", 0, 0, 21.25, False)
+
+    check_budget_before_call(
+        run_id="run-env-04", estimated_cost=0.02, db=db_session, max_run_cost=1.00
+    )
+    summary = get_cost_summary(db_session)
+    assert summary.budget_limit_usd == pytest.approx(25.0)
+    assert summary.percentage_used == pytest.approx(50.0)
+    assert summary.alert_triggered == "ALERT_50"
 
 
 # ---------------------------------------------------------------------------
@@ -583,4 +619,3 @@ def test_guardrails_edge_cases() -> None:
     with pytest.raises(SecurityViolationError) as exc_type:
         validate_untrusted_input(12345, role="cleaner", run_id="run-err")  # type: ignore[arg-type]
     assert "string" in str(exc_type.value)
-

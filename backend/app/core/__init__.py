@@ -1,6 +1,7 @@
 from app.core.budget import (
     MODEL_PRICING,
     BudgetExceededError,
+    active_budget_envelope,
     calculate_call_cost,
     check_budget_before_call,
     estimate_call_cost,
@@ -26,6 +27,7 @@ __all__ = [
     "LLMResponse",
     "MissingMaxTokensError",
     "calculate_call_cost",
+    "active_budget_envelope",
     "check_budget_before_call",
     "estimate_call_cost",
     "evaluate_budget_alert",
