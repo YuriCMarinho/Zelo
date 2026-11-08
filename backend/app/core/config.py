@@ -1,3 +1,4 @@
+import os
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -40,6 +41,10 @@ class Settings(BaseSettings):
     def sync_settings(self) -> "Settings":
         if self.database_url.startswith("postgres://"):
             self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
+        if (self.environment == "production" or os.environ.get("RENDER")) and (
+            "localhost" in self.database_url or "127.0.0.1" in self.database_url
+        ):
+            self.database_url = "sqlite:////tmp/smartrepair.db"
         if self.llm_mode.lower() == "real":
             self.llm_mode = "featherless"
         if self.langfuse_base_url and (
