@@ -14,7 +14,7 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | --- | --- | --- | --- | --- | --- |
 | **Planejamento** | **aprovada** | Orquestrador → Planejador / Revisor | `main` / `develop` | — | Escopo unificado e consolidado em `docs/PLAN.md` como fonte única da verdade (duplicidade com `planejamento2.md` removida) e Gate S0 aprovado. |
 | **Implementação** | **aprovada** | Dev 1–4 + Implementador | `develop` | `f9af095` | Sprint 1 e Sprint 2 100% concluídas. S2-T5, S2-T6, S2-T7 e S2-T8 aprovadas. Próxima etapa: Sprint 3 (Validação com Modelos Reais e Deploy). |
-| **Validação** | **não iniciada** | Dev 1–4 + Revisor | — | — | Reserva obrigatória de US$ 7,50 (30% dos US$ 25 da Featherless) preservada para os testes finais com modelos reais, ensaio e Demo Day. |
+| **Validação** | **em andamento** | Dev 1–4 + Revisor | `fix/s3-t9-real-llm-e2e` | — | Reserva obrigatória de US$ 7,50 (30% dos US$ 25 da Featherless) liberada sob controle exclusivo para S3-T9 e Demo Day. |
 
 ---
 
@@ -32,7 +32,7 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | **S2-T6** Fluxo C — Nó 3 (Resolvedor em LangGraph + Urgência × Agenda) | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `develop` (via PR #6) | — | Grafo de 5 passos do Nó 3 em LangGraph com PostgresSaver, interrupt/resume para ADM, agendamento determinístico Urgência × Agenda (100% cobr.), timeouts integrados no ciclo de vida, fallback Nó S enfileirado e endpoints HTTP em /api/tickets (99 testes, 92% cobertura global). |
 | **S2-T7** Integração Frontend (Sessão Agente ⇄ Anfitrião + Simulador) | Implementação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR #7) | `b4852bd` | Conexão UI às APIs (Chat, Orçamentos, Aprovação ADM, Simulador e Auditoria) com Design System Zelo, 102 testes backend (92.3% cobr.) e 6 testes frontend verdes. |
 | **S2-T8** Testes de Integração (Caminhos Alternativos) e Suíte de Segurança | Implementação | **aprovada** | Dev 4 + Implementador / Revisor | `develop` (via PR #8) | `f9af095` | Suíte completa com 162 testes verdes (92.5% cobertura), cobrindo caminho feliz, 5 caminhos alternativos, 100% prompt injection bloqueado e LGPD verificado. |
-| **S3-T9** Testes E2E com Modelos Reais (Featherless) e Recalibração de Custo | Validação | **não iniciada** | Dev 1 + Implementador / Revisor | `fix/s3-t9-real-llm-e2e` | — | Depende de S2 concluída. Ativa modelos reais pagos e atualiza `docs/COST.md`. |
+| **S3-T9** Testes E2E com Modelos Reais (Featherless) e Recalibração de Custo | Validação | **em revisão** | Dev 1 + Implementador / Revisor | `fix/s3-t9-real-llm-e2e` | — | Bateria E2E sob marcador @pytest.mark.real_llm, telemetria Langfuse e Seção 9 de calibração empírica no COST.md concluídas (165 testes verdes, 92.5% cobr.). |
 | **S3-T10** Deploy do Link Testável + Seed/Reset para Avaliadores | Validação | **não iniciada** | Dev 2 + Implementador / Revisor | `feature/s3-t10-deploy-link` | — | Depende de S2 concluída. |
 | **S3-T11** Roteiro, Gravação do Vídeo e Material do Pitch (Demo Day) | Validação | **não iniciada** | Dev 3 + Implementador / Revisor | `docs/s3-t11-pitch-video` | — | Depende de S2 concluída. |
 | **S3-T12** Pacote Final de Submissão e Plano B (`recorded_demo`) | Validação | **não iniciada** | Dev 4 + Implementador / Revisor | `docs/s3-t12-submission-plan-b` | — | Depende de S3-T9, S3-T10, S3-T11. |
