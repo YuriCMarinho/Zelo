@@ -158,8 +158,7 @@ export function ProviderSimulator({
   return (
     <div className="simulator-box" aria-label="Simulador de cenários do avaliador">
       <div>
-        <span className="eyebrow">CONTROLE DE DEMONSTRAÇÃO · HACKATHON</span>
-        <h3 style={{ margin: '4px 0 2px', fontSize: '18px' }}>Simulador de Cenários dos Agentes</h3>
+        <h3 style={{ margin: '0 0 4px', fontSize: '17px' }}>Simulador de Cenários dos Agentes</h3>
         <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)' }}>
           Dispare cenários do Fluxo A e Fluxo C para acompanhar a máquina de estados em tempo real.
         </p>

@@ -33,7 +33,6 @@ export function QuotesComparison({
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
-  const [loadingAudit, setLoadingAudit] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -43,11 +42,10 @@ export function QuotesComparison({
       .then((evs) => {
         if (!ignore) {
           setAuditEvents(evs)
-          setLoadingAudit(false)
         }
       })
       .catch(() => {
-        if (!ignore) setLoadingAudit(false)
+        // Ignora erro em modo demo/mock
       })
 
     return () => {
@@ -144,8 +142,8 @@ export function QuotesComparison({
         ) : null}
       </div>
 
-      {/* Trilha de Auditoria dos Agentes para esta Operação */}
-      {ticket && (
+      {/* Trilha de Auditoria exibida somente quando houver eventos registrados */}
+      {ticket && auditEvents.length > 0 && (
         <section
           style={{
             margin: '0 0 20px',
@@ -157,108 +155,50 @@ export function QuotesComparison({
           aria-label="Trilha de auditoria dos agentes"
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <div>
-              <span className="eyebrow" style={{ fontSize: '11px', color: 'var(--mar-profundo)' }}>
-                AUDITORIA DA OPERAÇÃO · TRILHA DOS AGENTES
-              </span>
-              <h3 style={{ margin: '2px 0 0', fontSize: '15px' }}>
-                Como os agentes processaram este chamado
-              </h3>
-            </div>
-            <span style={{ fontSize: '12px', color: 'var(--mar-72)', fontWeight: 600 }}>
+            <h3 style={{ margin: 0, fontSize: '15px' }}>
+              Como os agentes processaram este chamado
+            </h3>
+            <span className="tabular-nums" style={{ fontSize: '12px', color: 'var(--mar-72)', fontWeight: 600 }}>
               {auditEvents.length} etapa(s) registrada(s)
             </span>
           </div>
 
-          {loadingAudit ? (
-            <div style={{ fontSize: '13px', color: 'var(--mar-72)', padding: '8px 0' }}>
-              Carregando eventos dos agentes...
-            </div>
-          ) : auditEvents.length === 0 ? (
-            <div style={{ fontSize: '13px', color: 'var(--mar-72)', padding: '8px 0' }}>
-              Nenhum evento registrado ainda para este chamado.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {auditEvents.slice(0, 6).map((ev) => (
-                <div
-                  key={ev.id}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.85)',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
-                        {ev.node}
-                      </span>
-                      <strong>{ev.event_type}</strong>
-                    </div>
-                    <time style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
-                      {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
-                    </time>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {auditEvents.slice(0, 6).map((ev) => (
+              <div
+                key={ev.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  padding: '8px 12px',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                      {ev.node}
+                    </span>
+                    <strong>{ev.event_type}</strong>
                   </div>
-                  {ev.payload && Object.keys(ev.payload).length > 0 && (
-                    <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
-                      {Object.entries(ev.payload)
-                        .slice(0, 3)
-                        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-                        .join(' · ')}
-                    </div>
-                  )}
+                  <time className="tabular-nums" style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
+                    {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
+                  </time>
                 </div>
-              ))}
-              {auditEvents.length > 6 && (
-                <details style={{ fontSize: '12px', marginTop: '4px' }}>
-                  <summary style={{ cursor: 'pointer', color: 'var(--mar-profundo)', fontWeight: 600 }}>
-                    Ver mais {auditEvents.length - 6} etapas da operação...
-                  </summary>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                    {auditEvents.slice(6).map((ev) => (
-                      <div
-                        key={ev.id}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '4px',
-                          padding: '8px 12px',
-                          background: 'rgba(255, 255, 255, 0.85)',
-                          borderRadius: '10px',
-                          fontSize: '12px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
-                              {ev.node}
-                            </span>
-                            <strong>{ev.event_type}</strong>
-                          </div>
-                          <time style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
-                            {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
-                          </time>
-                        </div>
-                        {ev.payload && Object.keys(ev.payload).length > 0 && (
-                          <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
-                            {Object.entries(ev.payload)
-                              .slice(0, 3)
-                              .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-                              .join(' · ')}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                {ev.payload && Object.keys(ev.payload).length > 0 && (
+                  <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
+                    {Object.entries(ev.payload)
+                      .slice(0, 3)
+                      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+                      .join(' · ')}
                   </div>
-                </details>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
@@ -295,8 +235,8 @@ export function QuotesComparison({
                 <div className="quote-card-header">
                   <div>
                     <h3 className="quote-provider-name">{name}</h3>
-                    <span className="quote-provider-meta">
-                      ★ {rating} · Avaliado pela Zelo {quote.is_recommended ? '· Recomendado' : ''}
+                    <span className="quote-provider-meta tabular-nums">
+                      ★ {rating} · Prestador validado{quote.is_recommended ? ' · Melhor relação janela × preço' : ''}
                     </span>
                   </div>
                   <span className="quote-price tabular-nums">{money(quote.amount)}</span>
@@ -307,7 +247,6 @@ export function QuotesComparison({
                     <span className="quote-chip">{quote.proposed_availability}</span>
                   )}
                   {quote.description && <span className="quote-chip">{quote.description}</span>}
-                  <span className="quote-chip">Garantia Zelo inclusa</span>
                 </div>
               </div>
             )

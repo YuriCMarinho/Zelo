@@ -17,10 +17,9 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
         close_at_end = True
 
     try:
-        # 1. Properties
+        # 1. Properties (3 imóveis selecionados para o grid 1x3)
         prop_copa_id = "prop-copacabana-01"
         prop_vila_id = "prop-vilamadalena-02"
-        prop_gramado_id = "prop-gramado-03"
         prop_recife_id = "prop-portodigital-04"
 
         existing_props = {p.id: p for p in db.query(Property).all()}
@@ -59,25 +58,6 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     rules_faq=(
                         "Check-in inteligente via fechadura eletrônica. "
                         "Proibidas festas e eventos com som alto."
-                    ),
-                )
-            )
-
-        if prop_gramado_id not in existing_props:
-            db.add(
-                Property(
-                    id=prop_gramado_id,
-                    name="Chalé Aconchegante Gramado",
-                    description=(
-                        "Chalé alpino com lareira ecológica, hidromassagem e calefação, "
-                        "cercado pela natureza da Serra Gaúcha."
-                    ),
-                    address="Rua das Hortênsias, 850 - Planalto",
-                    city="Gramado",
-                    state="RS",
-                    rules_faq=(
-                        "Lareira com lenha disponibilizada na garagem. "
-                        "Pets de pequeno porte são bem-vindos."
                     ),
                 )
             )
@@ -141,16 +121,6 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                 start_date=today + timedelta(days=4),
                 end_date=today + timedelta(days=10),
                 status="confirmed",
-            ),
-            # Gramado: Reserva ativa encerrando amanhã
-            Booking(
-                id="book-gramado-current",
-                property_id=prop_gramado_id,
-                guest_name="Beatriz Mendonça",
-                guest_contact="+55 (54) 98111-2233",
-                start_date=today - timedelta(days=4),
-                end_date=today + timedelta(days=1),
-                status="active",
             ),
             # Recife - Porto Digital: Livre hoje; reserva de imersão tech em 5 dias
             Booking(

@@ -17,7 +17,6 @@ describe('AgentGraphView Component', () => {
     expect(screen.getByRole('heading', { name: 'Grafo de Fases dos Agentes & Imóveis' })).toBeInTheDocument()
     expect(screen.getAllByText('Casa Aurora').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Loft Jardim').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Vila Areia').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Studio Tech/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Roteador/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Nó 1: Comercial/).length).toBeGreaterThanOrEqual(1)

@@ -213,8 +213,51 @@ function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
   </section>
 }
 
-function Overview({ property }: { property: Property }) {
-  return <div className="overview-grid"><div><div className="gallery"><img className="gallery-main" src={property.image} alt={`Vista principal de ${property.title}`} /><div>{property.gallery.map((image, index) => <img key={image} src={image} alt={`Ambiente ${index + 1} de ${property.title}`} />)}</div></div><section className="about-section"><span className="eyebrow">SOBRE O ESPAÇO</span><h2>Um lugar para se sentir em casa.</h2><p>{property.description}</p><div className="amenities">{property.amenities.map((amenity) => <span key={amenity}>✓ {amenity}</span>)}</div></section></div><aside className="overview-aside"><div className="stay-card"><span className="eyebrow">SUA PRÓXIMA ESTADIA</span><div><strong>{money(property.nightlyRate)}</strong><span> / noite</span></div><p>Conforto em cada detalhe, cuidado em cada conversa.</p><div className="stay-divider" /><span>◷ &nbsp; Check-in flexível</span><span>✦ &nbsp; Suporte durante a estadia</span></div><Calendar occupancy={property.occupancy} /></aside></div>
+function Overview({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
+  return (
+    <div className="overview-grid">
+      <div>
+        <div className="gallery">
+          <img className="gallery-main" src={property.image} alt={`Vista principal de ${property.title}`} />
+          <div>
+            {property.gallery.map((image, index) => (
+              <img key={image} src={image} alt={`Ambiente ${index + 1} de ${property.title}`} />
+            ))}
+          </div>
+        </div>
+        <section className="about-section">
+          <h2>Sobre o imóvel</h2>
+          <p>{property.description}</p>
+          <div className="amenities">
+            {property.amenities.map((amenity) => (
+              <span key={amenity}>{amenity}</span>
+            ))}
+          </div>
+        </section>
+      </div>
+      <aside className="overview-aside">
+        <div className="stay-card">
+          <div className="tabular-nums">
+            <strong>{money(property.nightlyRate)}</strong>
+            <span> / noite</span>
+          </div>
+          <p>Canal direto com triagem automática de dúvidas de reserva e chamados de manutenção.</p>
+          <div className="stay-divider" />
+          <span>Ponto único de chat por imóvel</span>
+          <span>Contratação somente com aprovação do anfitrião</span>
+          <button
+            type="button"
+            className="shortcut-btn primary"
+            style={{ marginTop: '8px', textAlign: 'center' }}
+            onClick={() => navigate(propertyUrl(property.id, 'chat'))}
+          >
+            Abrir chat do imóvel →
+          </button>
+        </div>
+        <Calendar occupancy={property.occupancy} />
+      </aside>
+    </div>
+  )
 }
 
 const sampleQuotes = [
@@ -227,18 +270,172 @@ function QuotesPanel({ property, navigate }: { property: Property; navigate: (ur
   const [selected, setSelected] = useState<string>('carlos')
   const [confirmed, setConfirmed] = useState(false)
   const choice = sampleQuotes.find((quote) => quote.id === selected) ?? sampleQuotes[0]
-  return <section className="quotes-layout" aria-labelledby="quotes-heading"><div className="quotes-main">
-    <div style={{ background: 'var(--mar-08)', padding: '12px 16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span>ℹ Esta é uma prévia estática ilustrativa. A cotação e aprovação real dos agentes ficam na aba <strong>Agente ⇄ Anfitrião</strong>.</span>
-      <button type="button" className="action-primary" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => navigate(propertyUrl(property.id, 'adm'))}>
-        Ir para Agente ⇄ Anfitrião ↗
-      </button>
-    </div>
-    <div className="quotes-intro"><span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span><span className="eyebrow">EXEMPLO DE COMPARATIVO · {property.title.toLocaleUpperCase('pt-BR')}</span><h2 id="quotes-heading">Chuveiro sem água quente</h2><p>Neste exemplo, 3 de 5 eletricistas responderam. O hóspede foi avisado de que o problema está sendo cuidado.</p></div><div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">{sampleQuotes.map((quote) => <button type="button" role="radio" aria-checked={selected === quote.id} key={quote.id} className={`quote-card ${selected === quote.id ? 'selected' : ''}`} onClick={() => { setSelected(quote.id); setConfirmed(false) }}><span className="quote-card-top"><span><strong>{quote.name}</strong><small>{quote.rating}{quote.note ? ` · ${quote.note}` : ''}</small></span><b>{money(quote.price)}</b></span><span className="quote-time">{quote.when}</span></button>)}</div><div className="quote-action"><button type="button" onClick={() => setConfirmed(true)}>{confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}</button><p>Simulação local: nenhuma contratação ou agendamento é realizado.</p></div></div><aside className="quotes-aside"><span className="eyebrow">VOCÊ DECIDE</span><h3>Compare com calma.</h3><p>Preço, avaliação e horário ficam lado a lado para ajudar sua escolha. A contratação só pode acontecer após sua aprovação.</p><div className="quote-steps"><span>01 <strong>Orçamentos recebidos</strong></span><span>02 <strong>Sua escolha</strong></span><span>03 <strong>Agendamento confirmado</strong></span></div></aside></section>
+  return (
+    <section className="quotes-layout" aria-labelledby="quotes-heading">
+      <div className="quotes-main">
+        <div
+          style={{
+            background: 'var(--mar-08)',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            marginBottom: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span>
+            Simulação rápida de comparativo. Para aprovar chamados reais dos agentes, acesse{' '}
+            <strong>Agente ⇄ Anfitrião</strong>.
+          </span>
+          <button
+            type="button"
+            className="action-primary"
+            style={{ padding: '6px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
+            onClick={() => navigate(propertyUrl(property.id, 'adm'))}
+          >
+            Ir para Agente ⇄ Anfitrião ↗
+          </button>
+        </div>
+        <div className="quotes-intro">
+          <span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span>
+          <h2 id="quotes-heading">Chuveiro sem água quente</h2>
+          <p>3 de 5 eletricistas consultados enviaram orçamento. O hóspede já foi informado do acompanhamento.</p>
+        </div>
+        <div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">
+          {sampleQuotes.map((quote) => (
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selected === quote.id}
+              key={quote.id}
+              className={`quote-card ${selected === quote.id ? 'selected' : ''}`}
+              onClick={() => {
+                setSelected(quote.id)
+                setConfirmed(false)
+              }}
+            >
+              <span className="quote-card-top">
+                <span>
+                  <strong>{quote.name}</strong>
+                  <small>
+                    {quote.rating}
+                    {quote.note ? ` · ${quote.note}` : ''}
+                  </small>
+                </span>
+                <b className="tabular-nums">{money(quote.price)}</b>
+              </span>
+              <span className="quote-time">{quote.when}</span>
+            </button>
+          ))}
+        </div>
+        <div className="quote-action">
+          <button type="button" onClick={() => setConfirmed(true)}>
+            {confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}
+          </button>
+          <p>Simulação local: nenhuma contratação ou agendamento é realizado.</p>
+        </div>
+      </div>
+      <aside className="quotes-aside">
+        <h3>Como funciona a aprovação</h3>
+        <p>O Nó 3 coleta cotações sem negociar preço e pausa até sua escolha explícita antes de agendar a visita.</p>
+        <div className="quote-steps">
+          <span>
+            1. <strong>Orçamentos recebidos</strong>
+          </span>
+          <span>
+            2. <strong>Sua aprovação</strong>
+          </span>
+          <span>
+            3. <strong>Agendamento na janela ideal</strong>
+          </span>
+        </div>
+      </aside>
+    </section>
+  )
 }
 
-function PropertyPage({ property, tab, navigate, messages, sendMessage }: { property: Property; tab: PropertyTab; navigate: (url: string) => void; messages: ChatMessage[]; sendMessage: (message: ChatMessage) => void }) {
-  return <main className="page-width detail-page"><div className="breadcrumb"><a href="/" onClick={(event) => { event.preventDefault(); navigate('/') }}>Imóveis</a><span>›</span><span>{property.title}</span></div><div className="detail-intro"><div><span className="eyebrow">{property.neighborhood.toLocaleUpperCase('pt-BR')} · CEARÁ</span><h1>{property.title}</h1><p><span className="rating">★ {property.rating.toFixed(2)}</span> <span className="dot-sep">·</span> {property.reviews} avaliações <span className="dot-sep">·</span> {property.location}</p></div><div className="detail-capacity">{property.guests} hóspedes <span>·</span> {property.bedrooms} quartos <span>·</span> {property.beds} camas <span>·</span> {property.baths} banheiros</div></div><nav className="tabs" aria-label="Seções do imóvel">{tabs.map((item) => <a key={item.id} href={propertyUrl(property.id, item.id)} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'active' : ''} onClick={(event) => { event.preventDefault(); navigate(propertyUrl(property.id, item.id)) }}>{item.label}</a>)}</nav><div className="tab-content" key={property.id}>{tab === 'visao-geral' ? <Overview property={property} /> : tab === 'orcamentos' ? <QuotesPanel property={property} navigate={navigate} /> : <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />}</div></main>
+function PropertyPage({
+  property,
+  tab,
+  navigate,
+  messages,
+  sendMessage,
+}: {
+  property: Property
+  tab: PropertyTab
+  navigate: (url: string) => void
+  messages: ChatMessage[]
+  sendMessage: (message: ChatMessage) => void
+}) {
+  return (
+    <main className="page-width detail-page">
+      <div className="breadcrumb" style={{ justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <a
+            href="/"
+            onClick={(event) => {
+              event.preventDefault()
+              navigate('/')
+            }}
+          >
+            Imóveis
+          </a>
+          <span>›</span>
+          <span>{property.title}</span>
+        </div>
+        <a
+          href="/agentes"
+          style={{ fontSize: '13px', fontWeight: 600, color: 'var(--mar-profundo)' }}
+          onClick={(event) => {
+            event.preventDefault()
+            navigate('/agentes')
+          }}
+        >
+          Ver fluxo no Grafo de Agentes →
+        </a>
+      </div>
+      <div className="detail-intro">
+        <div>
+          <h1>{property.title}</h1>
+          <p className="tabular-nums">
+            <span className="rating">★ {property.rating.toFixed(2)}</span> <span className="dot-sep">·</span>{' '}
+            {property.reviews} avaliações <span className="dot-sep">·</span> {property.location}
+          </p>
+        </div>
+        <div className="detail-capacity tabular-nums">
+          {property.guests} hóspedes <span>·</span> {property.bedrooms} quartos <span>·</span> {property.beds} camas{' '}
+          <span>·</span> {property.baths} banheiros
+        </div>
+      </div>
+      <nav className="tabs" aria-label="Seções do imóvel">
+        {tabs.map((item) => (
+          <a
+            key={item.id}
+            href={propertyUrl(property.id, item.id)}
+            aria-current={tab === item.id ? 'page' : undefined}
+            className={tab === item.id ? 'active' : ''}
+            onClick={(event) => {
+              event.preventDefault()
+              navigate(propertyUrl(property.id, item.id))
+            }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      <div className="tab-content" key={property.id}>
+        {tab === 'visao-geral' ? (
+          <Overview property={property} navigate={navigate} />
+        ) : tab === 'orcamentos' ? (
+          <QuotesPanel property={property} navigate={navigate} />
+        ) : (
+          <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />
+        )}
+      </div>
+    </main>
+  )
 }
 
 export default function App() {

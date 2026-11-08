@@ -187,13 +187,9 @@ export function PropertyWorkspace({
               isLoading={loadingQuotes}
             />
             <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div className="timeline-card">
-                <span className="eyebrow">ÁREA DO ANFITRIÃO</span>
-                <h3 style={{ margin: '4px 0' }}>Decisões com você</h3>
-                <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)' }}>
-                  Somente as decisões deste imóvel aparecem aqui. O agente reúne orçamentos e aguarda sua escolha explícita.
-                </p>
-              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)', lineHeight: 1.5 }}>
+                Somente as decisões deste imóvel aparecem aqui. O agente reúne orçamentos e aguarda sua escolha explícita.
+              </p>
               <StateTimeline
                 status={ticket?.status || 'awaiting_adm_approval'}
                 scheduledDate={scheduledDate}
