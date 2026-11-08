@@ -1,11 +1,44 @@
 from datetime import date, timedelta
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.db.models import Booking, MaintenanceTicket, Property, Provider
 from app.db.session import SessionLocal, engine
 from app.schemas.common import ProviderCategory, ReportedByRole, TicketStatus, TicketUrgency
+
+
+def _ensure_schema_columns(db: Session) -> None:
+    """Garante de forma idempotente que colunas novas existam em bancos preexistentes."""
+    try:
+        bind = db.get_bind()
+        inspector = inspect(bind)
+        tables = set(inspector.get_table_names())
+
+        if "properties" in tables:
+            prop_cols = {c["name"] for c in inspector.get_columns("properties")}
+            if "nightly_rate" not in prop_cols:
+                db.execute(
+                    text("ALTER TABLE properties ADD COLUMN nightly_rate FLOAT NOT NULL DEFAULT 350.0")
+                )
+
+        if "bookings" in tables:
+            book_cols = {c["name"] for c in inspector.get_columns("bookings")}
+            if "total_price" not in book_cols:
+                db.execute(text("ALTER TABLE bookings ADD COLUMN total_price FLOAT"))
+            if "num_guests" not in book_cols:
+                db.execute(
+                    text("ALTER TABLE bookings ADD COLUMN num_guests INTEGER NOT NULL DEFAULT 2")
+                )
+            if "rejection_reason" not in book_cols:
+                db.execute(text("ALTER TABLE bookings ADD COLUMN rejection_reason TEXT"))
+            if "session_id" not in book_cols:
+                db.execute(text("ALTER TABLE bookings ADD COLUMN session_id VARCHAR(100)"))
+
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def run_seed(db: Session | None = None) -> dict[str, int]:
@@ -15,8 +48,12 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
         Base.metadata.create_all(bind=engine)
         db = SessionLocal()
         close_at_end = True
+    else:
+        Base.metadata.create_all(bind=db.get_bind())
 
     try:
+        _ensure_schema_columns(db)
+
         # 1. Properties (3 imóveis selecionados para o grid 1x3)
         prop_copa_id = "prop-copacabana-01"
         prop_vila_id = "prop-vilamadalena-02"
@@ -36,12 +73,15 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     address="Av. Atlântica, 1702 - Copacabana",
                     city="Rio de Janeiro",
                     state="RJ",
+                    nightly_rate=420.0,
                     rules_faq=(
                         "Check-in a partir das 15h. Não fumar no interior do imóvel. "
                         "Silêncio após as 22h."
                     ),
                 )
             )
+        else:
+            existing_props[prop_copa_id].nightly_rate = 420.0
 
         if prop_vila_id not in existing_props:
             db.add(
@@ -55,12 +95,15 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     address="Rua Girassol, 420 - Vila Madalena",
                     city="São Paulo",
                     state="SP",
+                    nightly_rate=350.0,
                     rules_faq=(
                         "Check-in inteligente via fechadura eletrônica. "
                         "Proibidas festas e eventos com som alto."
                     ),
                 )
             )
+        else:
+            existing_props[prop_vila_id].nightly_rate = 350.0
 
         if prop_recife_id not in existing_props:
             db.add(
@@ -77,6 +120,7 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     address="Cais do Apolo, 222 - Bairro do Recife",
                     city="Recife",
                     state="PE",
+                    nightly_rate=290.0,
                     rules_faq=(
                         "Check-in autônomo 24h via fechadura digital inteligente com token. "
                         "Wi-Fi dedicado ultra-rápido (SSID: PortoDigital_Tech, 500Mbps simétrico). "
@@ -84,6 +128,8 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     ),
                 )
             )
+        else:
+            existing_props[prop_recife_id].nightly_rate = 290.0
 
         db.flush()
 

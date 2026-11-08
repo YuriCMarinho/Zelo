@@ -235,7 +235,7 @@ async def test_commercial_faq_response(db_session: Session, sample_property: Pro
 async def test_commercial_booking_creation_and_persistence(
     db_session: Session, sample_property: Property
 ) -> None:
-    """Nó 1 detecta intenção de reserva e persiste o Booking confirmado no banco de dados."""
+    """Nó 1 detecta intenção de reserva, calcula valor e persiste o Booking como pending_approval."""
     start_date = date.today() + timedelta(days=20)
     end_date = start_date + timedelta(days=4)
     msg = (
@@ -250,7 +250,8 @@ async def test_commercial_booking_creation_and_persistence(
         db=db_session,
     )
     assert output.route_destination == RouteDestination.COMMERCIAL_NODE1
-    assert "confirmada" in output.response_text.lower()
+    assert "aprovação do anfitrião" in output.response_text.lower()
+    assert output.booking_id is not None
 
     # Validação no banco
     created_booking = (
@@ -259,8 +260,9 @@ async def test_commercial_booking_creation_and_persistence(
         .first()
     )
     assert created_booking is not None
-    assert created_booking.status == "confirmed"
+    assert created_booking.status == "pending_approval"
     assert created_booking.end_date == end_date
+    assert created_booking.total_price == 4 * sample_property.nightly_rate
 
 
 @pytest.mark.asyncio
@@ -279,9 +281,9 @@ async def test_commercial_booking_with_br_dates_and_simulated_dates(
         run_id="run-comm-br-dates",
         db=db_session,
     )
-    assert "confirmada" in out_br.response_text.lower()
+    assert "aprovação do anfitrião" in out_br.response_text.lower()
 
-    # Teste 2: intenção sem datas explícitas (janela simulada padrão)
+    # Teste 2: intenção sem datas explícitas (janela simulada padrão quando sem histórico)
     msg_simulated = "Gostaria de fechar estadia e fazer a reserva agora mesmo."
     out_sim = await handle_commercial_message(
         prop=sample_property,
@@ -289,7 +291,7 @@ async def test_commercial_booking_with_br_dates_and_simulated_dates(
         run_id="run-comm-simulated-dates",
         db=db_session,
     )
-    assert "confirmada" in out_sim.response_text.lower()
+    assert "aprovação do anfitrião" in out_sim.response_text.lower()
 
 
 @pytest.mark.asyncio
@@ -610,3 +612,179 @@ async def test_commercial_check_in_time_ignores_access_method(
         db=db_session,
     )
     assert output.response_text == f"Check-in a partir das {time}."
+
+
+# ==============================================================================
+# 5. TESTES DE GOVERNANÇA DE RESERVAS, MULTI-TURN E SESSÕES CONCORRENTES
+# ==============================================================================
+
+
+@pytest.mark.asyncio
+async def test_commercial_natural_language_dates_and_single_checkin_clarification(
+    db_session: Session, sample_property: Property
+) -> None:
+    """Agente Comercial pede data de saída se só houver data de entrada e aceita linguagem natural."""
+    # Caso 1: apenas data de entrada -> solicita data de check-out
+    out_single = await handle_commercial_message(
+        prop=sample_property,
+        message="Quero reservar a partir do dia 20/12/2027",
+        run_id="run-single-date",
+        db=db_session,
+    )
+    assert out_single.booking_id is None
+    assert "check-out" in out_single.response_text.lower()
+
+    # Caso 2: linguagem natural ("de 10 a 14 de dezembro de 2027 para 3 pessoas")
+    out_nat = await handle_commercial_message(
+        prop=sample_property,
+        message="Quero reservar de 10 a 14 de dezembro de 2027 para 3 pessoas pelo valor de 1200",
+        run_id="run-nat-date",
+        db=db_session,
+    )
+    assert out_nat.booking_id is not None
+    booking = db_session.query(Booking).filter_by(id=out_nat.booking_id).first()
+    assert booking is not None
+    assert booking.status == "pending_approval"
+    assert booking.num_guests == 3
+    assert booking.total_price == 1200.0
+    assert booking.start_date == date(2027, 12, 10)
+    assert booking.end_date == date(2027, 12, 14)
+
+
+def test_booking_host_approve_and_reject_with_chat_notifications(
+    client: TestClient, sample_property: Property
+) -> None:
+    """Fluxo ponta a ponta: Hóspede solicita reserva -> Anfitrião aprova ou recusa -> Notificação no Chat."""
+    session_id = "sess-jurado-recife"
+    start_d = (date.today() + timedelta(days=50)).strftime("%d/%m/%Y")
+    end_d = (date.today() + timedelta(days=53)).strftime("%d/%m/%Y")
+
+    # 1. Hóspede solicita reserva no chat
+    chat_res = client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "message": f"Quero alugar de {start_d} a {end_d} para 2 pessoas",
+            "sender_role": "tenant",
+            "session_id": session_id,
+            "channel": "guest",
+        },
+    )
+    assert chat_res.status_code == 200
+    chat_data = chat_res.json()
+    booking_id = chat_data["booking_id"]
+    assert booking_id is not None
+
+    # 2. Anfitrião consulta reservas pendentes do imóvel
+    list_res = client.get(f"/api/properties/{sample_property.id}/bookings")
+    assert list_res.status_code == 200
+    bookings = list_res.json()
+    assert any(b["id"] == booking_id and b["status"] == "pending_approval" for b in bookings)
+
+    # 3. Anfitrião aprova a reserva pelo valor de R$ 1.050,00
+    approve_res = client.post(
+        f"/api/bookings/{booking_id}/approve",
+        json={"final_price": 1050.0, "host_notes": "Aprovado para a banca"},
+    )
+    assert approve_res.status_code == 200
+    approved_data = approve_res.json()
+    assert approved_data["status"] == "confirmed"
+    assert approved_data["total_price"] == 1050.0
+
+    # 4. Histórico do chat do hóspede recebe automaticamente a confirmação do anfitrião
+    hist_res = client.get(
+        f"/api/chat/history?property_id={sample_property.id}&session_id={session_id}&channel=guest"
+    )
+    assert hist_res.status_code == 200
+    hist = hist_res.json()
+    assert any("aprovou sua reserva" in item["body"].lower() for item in hist)
+
+    # 5. Segunda solicitação recusada pelo anfitrião com justificativa
+    start_d2 = (date.today() + timedelta(days=60)).strftime("%d/%m/%Y")
+    end_d2 = (date.today() + timedelta(days=62)).strftime("%d/%m/%Y")
+    chat_res2 = client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "message": f"Quero reservar de {start_d2} a {end_d2}",
+            "sender_role": "tenant",
+            "session_id": session_id,
+            "channel": "guest",
+        },
+    )
+    booking_id_2 = chat_res2.json()["booking_id"]
+    assert booking_id_2 is not None
+
+    reject_res = client.post(
+        f"/api/bookings/{booking_id_2}/reject",
+        json={"reason": "Imóvel passará por manutenção preventiva no período."},
+    )
+    assert reject_res.status_code == 200
+    rejected_data = reject_res.json()
+    assert rejected_data["status"] == "rejected"
+    assert "manutenção preventiva" in rejected_data["rejection_reason"]
+
+    hist_res2 = client.get(
+        f"/api/chat/history?property_id={sample_property.id}&session_id={session_id}&channel=guest"
+    )
+    hist2 = hist_res2.json()
+    assert any("não pôde aceitar" in item["body"].lower() for item in hist2)
+
+
+def test_concurrent_sessions_and_channels_isolation(
+    client: TestClient, sample_property: Property
+) -> None:
+    """Garante que múltiplos jurados testando sem login têm históricos e contextos isolados."""
+    # Jurado 1 conversa no canal de hóspede
+    client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "message": "Olá, qual o horário de check-in?",
+            "sender_role": "tenant",
+            "session_id": "sess-jurado-01",
+            "channel": "guest",
+        },
+    )
+    # Jurado 2 relata manutenção como hóspede em sua própria sessão
+    res_j2 = client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "message": "O chuveiro da suíte queimou e está saindo água fria.",
+            "sender_role": "tenant",
+            "session_id": "sess-jurado-02",
+            "channel": "guest",
+        },
+    )
+    assert res_j2.status_code == 200
+    assert res_j2.json()["route_destination"] == "maintenance_node2"
+    assert res_j2.json()["ticket_id"] is not None
+
+    # Camareira relata vistoria pós-checkout no canal cleaner do Jurado 1
+    client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "message": "Vazamento no sifão da pia da cozinha após checkout.",
+            "sender_role": "cleaner",
+            "session_id": "sess-jurado-01",
+            "channel": "cleaner",
+        },
+    )
+
+    h_j1_guest = client.get(
+        f"/api/chat/history?property_id={sample_property.id}&session_id=sess-jurado-01&channel=guest"
+    ).json()
+    h_j1_cleaner = client.get(
+        f"/api/chat/history?property_id={sample_property.id}&session_id=sess-jurado-01&channel=cleaner"
+    ).json()
+    h_j2_guest = client.get(
+        f"/api/chat/history?property_id={sample_property.id}&session_id=sess-jurado-02&channel=guest"
+    ).json()
+
+    assert len(h_j1_guest) == 2
+    assert len(h_j1_cleaner) == 2
+    assert len(h_j2_guest) == 2
+    assert all("sifão" not in m["body"].lower() for m in h_j1_guest)
+    assert all("chuveiro" not in m["body"].lower() for m in h_j1_guest)

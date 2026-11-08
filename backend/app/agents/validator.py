@@ -222,16 +222,31 @@ async def handle_maintenance_message(
     sender_role: ReportedByRole,
     run_id: str,
     db: Session,
+    history: list[dict[str, str]] | None = None,
 ) -> tuple[str, str | None]:
     """Processa relatos de manutenção no Nó 2.
 
     Se o relato for vago ou incompleto, formula esclarecimento empático sem abrir ticket.
-    Se suficiente, classifica com Qwen3.5-4B, persiste o MaintenanceTicket e retorna confirmação.
+    Se suficiente (ou complementado em conversa multi-turn), classifica com Qwen3.5-4B,
+    persiste o MaintenanceTicket e retorna confirmação com orientação de segurança se aplicável.
     """
-    text_lower = message.lower()
+    effective_message = message.strip()
+    if history:
+        last_assistant = next(
+            (h["content"].lower() for h in reversed(history) if h.get("role") == "assistant"),
+            "",
+        )
+        prev_user = next(
+            (h["content"] for h in reversed(history) if h.get("role") == "user"),
+            "",
+        )
+        if ("qual item" in last_assistant or "qual cômodo" in last_assistant) and prev_user:
+            effective_message = f"{prev_user.strip()} - {effective_message}"
+
+    text_lower = effective_message.lower()
 
     # 1. Verificação de relato vago ou incompleto
-    if _is_vague_report(message):
+    if _is_vague_report(effective_message):
         clarification_msg = (
             "Sentimos muito pelo inconveniente com o imóvel! Para que possamos acionar "
             "o especialista correto e resolver a questão com agilidade, você poderia "
@@ -244,7 +259,7 @@ async def handle_maintenance_message(
     category = _detect_category(text_lower)
     urgency = _detect_urgency(text_lower)
     location = _detect_location(text_lower)
-    clean_description = message.strip()
+    clean_description = effective_message
 
     # 3. Chamada ao modelo validador Qwen3.5-4B
     system_prompt = (
@@ -256,7 +271,7 @@ async def handle_maintenance_message(
     )
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": message},
+        {"role": "user", "content": effective_message},
     ]
 
     await generate(
@@ -285,9 +300,15 @@ async def handle_maintenance_message(
     db.refresh(ticket)
 
     urgency_label = "URGENTE" if urgency == TicketUrgency.URGENT else "NORMAL"
+    safety_note = ""
+    if any(k in text_lower for k in ("faísca", "faisca", "choque", "curto")):
+        safety_note = " Por segurança, recomendamos não utilizar o ponto elétrico até a chegada do profissional."
+    elif any(k in text_lower for k in ("gás", "gas")):
+        safety_note = " Por segurança, feche o registro de gás e mantenha o ambiente ventilado."
+
     confirmation_msg = (
         f"Compreendido e registrado com sucesso! Abrimos o chamado de manutenção "
-        f"#{ticket.id[:8]} com nível de urgência '{urgency_label}' para {location}. "
+        f"#{ticket.id[:8]} com nível de urgência '{urgency_label}' para {location}.{safety_note} "
         f"Nossa plataforma já está iniciando a cotação com prestadores homologados "
         f"para resolver o problema o mais breve possível."
     )

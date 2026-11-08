@@ -11,12 +11,27 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.budget import reset_in_memory_costs
-from app.db.models import AuditEvent, CostRecord, MaintenanceTicket, Property, Quote
+from app.db.models import (
+    AuditEvent,
+    Booking,
+    ChatMessageRecord,
+    CostRecord,
+    MaintenanceTicket,
+    Property,
+    Quote,
+)
 from app.db.seed import run_seed
 from app.db.session import get_db
 
 demo_router = APIRouter(prefix="/api/demo", tags=["Demonstração"])
 DatabaseDep = Annotated[Session, Depends(get_db)]
+
+SEED_BOOKING_IDS = {
+    "book-copa-current",
+    "book-copa-future",
+    "book-vila-future",
+    "book-recife-future",
+}
 
 
 @demo_router.post("/reset")
@@ -27,6 +42,8 @@ def reset_demo(db: DatabaseDep) -> dict[str, Any]:
     db.query(MaintenanceTicket).delete()
     db.query(CostRecord).delete()
     db.query(AuditEvent).delete()
+    db.query(ChatMessageRecord).delete()
+    db.query(Booking).filter(~Booking.id.in_(SEED_BOOKING_IDS)).delete(synchronize_session=False)
     db.commit()
 
     # 2. Reseta ledger de custos em memória

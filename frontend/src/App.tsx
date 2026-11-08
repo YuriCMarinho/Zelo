@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ChatMessage, MaintenanceTicket, Occupancy, Property, PropertyTab } from './contracts'
+import type { BookingItem, ChatMessage, MaintenanceTicket, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
 import { AgentGraphView } from './components/AgentGraphView'
-import { fetchProperties, fetchTickets, resetDemoData } from './api/client'
+import { fetchProperties, fetchPropertyBookings, fetchTickets, resetDemoData } from './api/client'
 import { maintenanceOccupancy } from './maintenance-calendar'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
@@ -221,6 +221,7 @@ function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
 
 function Overview({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([])
+  const [remoteBookings, setRemoteBookings] = useState<BookingItem[]>([])
   const [calendarError, setCalendarError] = useState('')
   useEffect(() => {
     let active = true
@@ -230,13 +231,24 @@ function Overview({ property, navigate }: { property: Property; navigate: (url: 
       }).catch(() => {
         if (active) setCalendarError('Não foi possível atualizar as visitas de manutenção no calendário.')
       })
+      fetchPropertyBookings(property.id).then((items) => {
+        if (active) setRemoteBookings(items)
+      }).catch(() => {})
     }
     refresh()
     const timer = window.setInterval(refresh, 15000)
     window.addEventListener('focus', refresh)
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh) }
   }, [property.id])
-  const occupancy = [...property.occupancy, ...maintenanceOccupancy(tickets, property.id)]
+  const confirmedBookingsOccupancy: Occupancy[] = remoteBookings
+    .filter((b) => b.status === 'confirmed' || b.status === 'active')
+    .map((b) => ({
+      startDate: b.start_date,
+      endDate: b.end_date,
+      status: 'reserved' as const,
+      label: `Reserva confirmada · ${b.guest_name}`,
+    }))
+  const occupancy = [...property.occupancy, ...confirmedBookingsOccupancy, ...maintenanceOccupancy(tickets, property.id)]
   return (
     <div className="overview-grid">
       <div>

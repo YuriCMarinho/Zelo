@@ -28,6 +28,7 @@ function backend() {
   const state = { ticket, quote, approvalFails: false, dateRefusals: 0 }
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.endsWith(`/properties/${property.id}/tickets`)) return Response.json([ticket])
+    if (url.endsWith(`/properties/${property.id}/bookings`)) return Response.json([])
     if (url.endsWith(`/tickets/${ticket.id}/quotes`)) return Response.json([quote])
     if (url.endsWith(`/quotes/${quote.provider_id}/response`)) {
       const body = JSON.parse(String(init?.body))
@@ -134,4 +135,43 @@ it('escala ao anfitrião depois de três recusas sem anunciar uma nova proposta'
   }
   expect(await screen.findByText(/tentativas de data se esgotaram/)).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Prestador aceita a data/ })).not.toBeInTheDocument()
+})
+
+it('permite ao anfitrião aceitar ou recusar solicitações de hospedagem com notificação no chat', async () => {
+  const pendingBooking = {
+    id: 'book-pending-1',
+    property_id: property.id,
+    guest_name: 'Hóspede Interessado (a1b2)',
+    guest_contact: '(81) 99999-1111',
+    start_date: '2026-12-15',
+    end_date: '2026-12-18',
+    status: 'pending_approval',
+    total_price: 960,
+    num_guests: 2,
+    created_at: '2026-11-08T12:00:00Z',
+  }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith(`/properties/${property.id}/tickets`)) return Response.json([])
+    if (url.endsWith(`/properties/${property.id}/bookings`)) return Response.json([pendingBooking])
+    if (url.endsWith(`/bookings/${pendingBooking.id}/approve`)) {
+      const body = JSON.parse(String(init?.body || '{}'))
+      pendingBooking.status = 'confirmed'
+      if (body.final_price) pendingBooking.total_price = body.final_price
+      return Response.json(pendingBooking)
+    }
+    throw new Error(`Requisição inesperada: ${url}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  const onNewMessage = vi.fn()
+  render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={onNewMessage} />)
+
+  expect(await screen.findByText(/Hóspede Interessado \(a1b2\)/)).toBeInTheDocument()
+  const approveBtn = await screen.findByRole('button', { name: /Aceitar Reserva/ })
+  await user.click(approveBtn)
+
+  expect(await screen.findByRole('status')).toHaveTextContent(/confirmada/)
+  expect(onNewMessage).toHaveBeenCalledTimes(1)
+  expect(onNewMessage.mock.calls[0]![0].body).toMatch(/aprovou sua reserva/i)
 })

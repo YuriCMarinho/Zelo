@@ -148,11 +148,13 @@ async def route_chat_message(
     sender_role: ReportedByRole,
     run_id: str,
     db: Session | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> RouteDestination:
     """Roteia a mensagem recebida para o Nó 1 (Comercial) ou Nó 2 (Manutenção).
 
     Aplica guardrail de entrada contra prompt injection e excesso de tamanho.
-    Prioriza regras determinísticas com custo zero e aciona Qwen3.5-4B em casos ambíguos.
+    Prioriza regras determinísticas com custo zero, avalia contexto multi-turn
+    e aciona Qwen3.5-4B em casos ambíguos.
     """
     # 1. Guardrail de entrada (validação contra injection e limite de caracteres)
     sanitized = validate_untrusted_input(text=message, role=sender_role.value, run_id=run_id)
@@ -166,12 +168,29 @@ async def route_chat_message(
     is_maintenance = _matches_terms(text_lower, MAINTENANCE_TERMS) or bool(
         MAINTENANCE_REGEX.search(text_lower)
     )
-    is_commercial = _matches_terms(text_lower, COMMERCIAL_TERMS)
+    is_commercial = _matches_terms(text_lower, COMMERCIAL_TERMS) or bool(
+        re.search(r"\b\d{1,2}/\d{1,2}(?:/\d{4})?\b|\b\d{4}-\d{2}-\d{2}\b", text_lower)
+    )
     explicit_follow_up = re.search(
         r"\b(t[eé]cnico|prestador|chamado|ticket|reparo|conserto)\b", text_lower
     )
     if is_commercial and not is_maintenance and not explicit_follow_up:
         return RouteDestination.COMMERCIAL_NODE1
+
+    # 3b. Contexto multi-turn: se o agente pediu esclarecimento de manutenção ou datas de reserva
+    if history:
+        last_assistant = next(
+            (h["content"].lower() for h in reversed(history) if h.get("role") == "assistant"),
+            "",
+        )
+        if ("qual item" in last_assistant or "qual cômodo" in last_assistant) and not is_commercial:
+            return RouteDestination.MAINTENANCE_NODE2
+        if (
+            "quais datas" in last_assistant
+            or "data de check-out" in last_assistant
+            or "quantas diárias" in last_assistant
+        ) and not is_maintenance:
+            return RouteDestination.COMMERCIAL_NODE1
 
     # 4. Regra determinística: se o imóvel já tem chamado aberto não resolvido e a mensagem
     # faz menção a acompanhamento, reparo ou técnico, direciona sem custo ao Nó 2

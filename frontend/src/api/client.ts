@@ -1,5 +1,6 @@
 import type {
   AuditEvent,
+  BookingItem,
   CostSummary,
   MaintenanceTicket,
   Property,
@@ -8,6 +9,19 @@ import type {
 import { properties as defaultProperties } from '../demo-data'
 
 const API_BASE = '/api'
+const SESSION_STORAGE_KEY = 'zelo_session_id_v1'
+
+export function getSessionId(): string {
+  try {
+    const existing = window.localStorage.getItem(SESSION_STORAGE_KEY)
+    if (existing && existing.trim()) return existing.trim()
+    const generated = `sess-${crypto.randomUUID().slice(0, 8)}`
+    window.localStorage.setItem(SESSION_STORAGE_KEY, generated)
+    return generated
+  } catch {
+    return 'sess-local'
+  }
+}
 
 export async function fetchProperties(): Promise<Property[]> {
   try {
@@ -33,7 +47,7 @@ export async function fetchProperties(): Promise<Property[]> {
           description: String(item.description || fallback.description),
           image: fallback.image,
           gallery: fallback.gallery,
-          nightlyRate: fallback.nightlyRate,
+          nightlyRate: typeof item.nightly_rate === 'number' && item.nightly_rate > 0 ? item.nightly_rate : fallback.nightlyRate,
           guests: fallback.guests,
           bedrooms: fallback.bedrooms,
           beds: fallback.beds,
@@ -164,6 +178,9 @@ export interface ChatApiResult {
   routeDestination: string
   responseText: string
   ticketId: string | null
+  bookingId: string | null
+  sessionId: string
+  channel: 'guest' | 'cleaner'
   suggestedActions: string[]
 }
 
@@ -171,8 +188,12 @@ export async function sendChatMessage(params: {
   propertyId: string
   message: string
   senderRole: 'tenant' | 'cleaner'
+  sessionId?: string
+  channel?: 'guest' | 'cleaner'
   runId?: string
 }): Promise<ChatApiResult> {
+  const sessionId = params.sessionId || getSessionId()
+  const channel = params.channel || (params.senderRole === 'cleaner' ? 'cleaner' : 'guest')
   let res: Response
   try {
     res = await fetch(`${API_BASE}/chat`, {
@@ -182,6 +203,8 @@ export async function sendChatMessage(params: {
         property_id: params.propertyId,
         message: params.message,
         sender_role: params.senderRole,
+        session_id: sessionId,
+        channel,
         run_id: params.runId,
       }),
     })
@@ -206,8 +229,105 @@ export async function sendChatMessage(params: {
     routeDestination: String(data.route_destination),
     responseText: data.response_text as string,
     ticketId: typeof data.ticket_id === 'string' ? data.ticket_id : null,
+    bookingId: typeof data.booking_id === 'string' ? data.booking_id : null,
+    sessionId: typeof data.session_id === 'string' ? data.session_id : sessionId,
+    channel: data.channel === 'cleaner' ? 'cleaner' : 'guest',
     suggestedActions: Array.isArray(data.suggested_actions) ? data.suggested_actions : [],
   }
+}
+
+export interface ChatHistoryItemDto {
+  id: string
+  property_id: string
+  session_id: string
+  channel: string
+  sender: string
+  body: string
+  ticket_id?: string | null
+  booking_id?: string | null
+  created_at: string
+}
+
+export async function fetchChatHistory(
+  propertyId: string,
+  channel: 'guest' | 'cleaner' = 'guest',
+  sessionId?: string,
+): Promise<ChatHistoryItemDto[]> {
+  try {
+    const sid = sessionId || getSessionId()
+    const query = `?property_id=${encodeURIComponent(propertyId)}&session_id=${encodeURIComponent(sid)}&channel=${encodeURIComponent(channel)}`
+    const res = await fetch(`${API_BASE}/chat/history${query}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data)) return data as ChatHistoryItemDto[]
+    }
+  } catch {
+    // fallback silencioso
+  }
+  return []
+}
+
+export async function fetchPropertyBookings(propertyId: string): Promise<BookingItem[]> {
+  try {
+    const res = await fetch(`${API_BASE}/properties/${encodeURIComponent(propertyId)}/bookings`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data)) return data as BookingItem[]
+    }
+  } catch {
+    // fallback silencioso
+  }
+  return []
+}
+
+export async function fetchAllBookings(statusFilter?: string): Promise<BookingItem[]> {
+  try {
+    const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : ''
+    const res = await fetch(`${API_BASE}/bookings${query}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data)) return data as BookingItem[]
+    }
+  } catch {
+    // fallback silencioso
+  }
+  return []
+}
+
+export async function approveBooking(
+  bookingId: string,
+  finalPrice?: number,
+  hostNotes?: string,
+): Promise<BookingItem> {
+  const data = await requestJson(
+    `${API_BASE}/bookings/${encodeURIComponent(bookingId)}/approve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(finalPrice !== undefined ? { final_price: finalPrice } : {}),
+        ...(hostNotes ? { host_notes: hostNotes } : {}),
+      }),
+    },
+    'Falha ao aprovar reserva',
+  )
+  return data as BookingItem
+}
+
+export async function rejectBooking(
+  bookingId: string,
+  reason: string,
+): Promise<BookingItem> {
+  const data = await requestJson(
+    `${API_BASE}/bookings/${encodeURIComponent(bookingId)}/reject`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    },
+    'Falha ao recusar reserva',
+  )
+  return data as BookingItem
 }
 
 export async function fetchCostSummary(): Promise<CostSummary> {

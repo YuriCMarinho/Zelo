@@ -14,6 +14,7 @@ from app.agents.resolver_graph import close_resolver_checkpointer, init_resolver
 from app.agents.resolver_timeouts import set_timeout_scheduler
 from app.api import (
     audit_router,
+    bookings_router,
     chat_router,
     costs_router,
     demo_router,
@@ -70,6 +71,7 @@ app.add_middleware(
 )
 app.include_router(providers_router)
 app.include_router(chat_router, prefix="/api")
+app.include_router(bookings_router)
 app.include_router(tickets_router)
 app.include_router(property_tickets_router)
 app.include_router(costs_router)
