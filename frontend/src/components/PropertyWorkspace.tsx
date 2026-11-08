@@ -4,6 +4,7 @@ import { formatFriendlyDate, type ChatMessage, type MaintenanceTicket, type Prop
 import { propertyUrl } from '../routes'
 import { ChatPanel } from './ChatPanel'
 import { QuotesComparison } from './QuotesComparison'
+import { ProviderSimulator } from './ProviderSimulator'
 
 export function PropertyWorkspace({
   property,
@@ -16,136 +17,61 @@ export function PropertyWorkspace({
   messages: ChatMessage[]
   onNewMessage: (msg: ChatMessage) => void
 }) {
-  const [ticket, setTicket] = useState<MaintenanceTicket | null>(null)
-  const [quotes, setQuotes] = useState<Quote[]>([])
-  const [loadingQuotes, setLoadingQuotes] = useState(false)
-  const [scheduledDate, setScheduledDate] = useState<string | null>(null)
+  const [snapshot, setSnapshot] = useState<{
+    propertyId: string; ticket: MaintenanceTicket | null; quotes: Quote[]
+  }>({ propertyId: property.id, ticket: null, quotes: [] })
+  const [loadingQuotes, setLoadingQuotes] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [revision, setRevision] = useState(0)
+  const ticket = snapshot.propertyId === property.id ? snapshot.ticket : null
+  const quotes = snapshot.propertyId === property.id ? snapshot.quotes : []
+  const scheduledDate = ticket?.scheduled_date &&
+    ['confirmed_schedule', 'notifying_tenant', 'resolved'].includes(ticket.status)
+    ? ticket.scheduled_date : null
 
-  // Carrega chamados reais do imóvel
-  const loadTicketData = () => {
-    fetchTicketsForProperty(property.id)
-      .then(async (tickets) => {
-        const active = tickets[0]
-        if (active) {
-          setTicket(active)
-          if (active.scheduled_date) setScheduledDate(active.scheduled_date)
-          const qList = await fetchQuotes(active.id)
-          setQuotes(qList)
-        } else if (property.id === 'casa-aurora') {
-          // mantem em caso de teste offline
-        } else {
-          setTicket(null)
-          setQuotes([])
-        }
-      })
-      .catch(() => {})
+  function loadTicketData() {
+    setLoadingQuotes(true)
+    setRevision((previous) => previous + 1)
   }
 
   useEffect(() => {
-    let ignore = false
-    fetchTicketsForProperty(property.id)
-      .then(async (tickets) => {
-        if (ignore) return
-        const active = tickets[0]
+    let active = true
+    let inFlight = false
+    async function refresh() {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const tickets = await fetchTicketsForProperty(property.id)
+        const current = tickets[0] ?? null
+        const currentQuotes = current ? await fetchQuotes(current.id) : []
+        if (!active) return
+        setSnapshot({ propertyId: property.id, ticket: current, quotes: currentQuotes })
+        setLoadError('')
+      } catch (cause) {
         if (active) {
-          setTicket(active)
-          if (active.scheduled_date) {
-            setScheduledDate(active.scheduled_date)
-          }
-          setLoadingQuotes(true)
-          const qList = await fetchQuotes(active.id)
-          if (!ignore) {
-            setQuotes(qList)
-            setLoadingQuotes(false)
-          }
-        } else if (property.id === 'casa-aurora') {
-          setTicket({
-            id: 'tick-demo-302',
-            run_id: 'run-demo-001',
-            property_id: property.id,
-            reported_by_role: 'tenant',
-            category: 'eletricista',
-            urgency: 'normal',
-            location_in_property: 'Banheiro',
-            description: 'Chuveiro sem água quente',
-            status: 'awaiting_adm_approval',
-            adm_synthesis:
-              'Pedimos orçamento a 5 eletricistas da região. 3 responderam. O hóspede já foi avisado de que estamos cuidando.',
-            notify_tenant: true,
-            created_at: new Date().toISOString(),
-          })
-          setQuotes([
-            {
-              id: 'q-carlos',
-              ticket_id: 'tick-demo-302',
-              run_id: 'run-demo-001',
-              provider_id: 'prov-carlos',
-              provider_name: 'Carlos Eletricista',
-              provider_rating: 4.9,
-              amount: 180,
-              proposed_availability: 'Amanhã, 9h',
-              description: 'Hóspede sai às 11h',
-              status: 'received',
-              is_recommended: true,
-            },
-            {
-              id: 'q-volt',
-              ticket_id: 'tick-demo-302',
-              run_id: 'run-demo-001',
-              provider_id: 'prov-volt',
-              provider_name: 'Volt Reparos',
-              provider_rating: 4.7,
-              amount: 240,
-              proposed_availability: 'Hoje, 17h',
-              status: 'received',
-            },
-            {
-              id: 'q-joao',
-              ticket_id: 'tick-demo-302',
-              run_id: 'run-demo-001',
-              provider_id: 'prov-joao',
-              provider_name: 'João Faz-Tudo',
-              provider_rating: 4.5,
-              amount: 150,
-              proposed_availability: 'Sexta, 14h',
-              status: 'received',
-            },
-          ])
-        } else {
-          setTicket(null)
-          setQuotes([])
+          setLoadError(cause instanceof Error ? cause.message : 'Não foi possível atualizar o atendimento.')
         }
-      })
-      .catch(() => {})
-
-    return () => {
-      ignore = true
+      } finally {
+        inFlight = false
+        if (active) setLoadingQuotes(false)
+      }
     }
-  }, [property.id])
+    const refreshOnFocus = () => { void refresh() }
+    void refresh()
+    const timer = window.setInterval(refreshOnFocus, 5000)
+    window.addEventListener('focus', refreshOnFocus)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshOnFocus)
+    }
+  }, [property.id, revision, tab])
 
   async function handleApprove(providerId: string) {
     if (!ticket) return
     const updated = await approveQuote(ticket.id, providerId, ticket.run_id)
-    setTicket(updated)
-    // Após a aprovação o Nó 3 ainda espera a devolutiva do prestador; o hóspede só é
-    // avisado quando o dia estiver confirmado.
-    if (updated.status !== 'resolved' && updated.status !== 'confirmed_schedule') {
-      loadTicketData()
-      return
-    }
-    const dateStr = updated.scheduled_date || 'amanhã, 9h'
-    setScheduledDate(dateStr)
-
-    // Adiciona o aviso ao hóspede no chat do imóvel
-    onNewMessage({
-      id: crypto.randomUUID(),
-      propertyId: property.id,
-      channel: 'guest',
-      sender: 'agent',
-      body: `Perfeito! O anfitrião aprovou o orçamento e agendamos a visita para ${formatFriendlyDate(dateStr)}. Estaremos acompanhando!`,
-      time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
-      scheduledDate: dateStr,
-    })
+    setSnapshot((previous) => ({ ...previous, ticket: updated }))
+    loadTicketData()
   }
 
   const wifiSsid = property.id === 'prop-portodigital-04' ? 'PortoDigital_Tech' : 'Zelo_Hospedes'
@@ -153,6 +79,10 @@ export function PropertyWorkspace({
 
   return (
     <div className="tab-content">
+      {loadError && <div role="alert" className="form-error">
+        <p>{loadError}</p>
+        <button type="button" className="action-secondary" onClick={loadTicketData}>Atualizar atendimento</button>
+      </div>}
       {tab === 'chat' && (
         <div className="split-layout">
           <ChatPanel
@@ -256,6 +186,7 @@ export function PropertyWorkspace({
       {tab === 'adm' && (
         <div className="split-layout">
           <QuotesComparison
+            key={ticket?.id ?? property.id}
             property={property}
             ticket={ticket}
             quotes={quotes}
@@ -263,6 +194,17 @@ export function PropertyWorkspace({
             isLoading={loadingQuotes}
           />
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {ticket && <details className="adm-control-card">
+              <summary>Ações do prestador (demonstração)</summary>
+              <ProviderSimulator
+                key={ticket.id}
+                property={property}
+                currentTicketId={ticket.id}
+                ticketStatus={ticket.status}
+                onTicketUpdated={loadTicketData}
+                providerOnly
+              />
+            </details>}
             {/* 1. Painel de Controle e Garantias do Anfitrião (limpo, minimalista, sem emojis) */}
             <div className="adm-control-card">
               <span className="eyebrow">ÁREA DO ANFITRIÃO</span>

@@ -52,16 +52,38 @@ export async function fetchProperties(): Promise<Property[]> {
   return [...defaultProperties]
 }
 
-export async function fetchTicketsForProperty(propertyId: string): Promise<MaintenanceTicket[]> {
+export async function fetchTickets(propertyId?: string): Promise<MaintenanceTicket[]> {
+  const query = propertyId ? `?property_id=${encodeURIComponent(propertyId)}` : ''
+  const res = await fetch(`${API_BASE}/tickets${query}`)
+  if (!res.ok) throw new Error('Não foi possível carregar os chamados. Tente atualizar a lista.')
+  const data: unknown = await res.json()
+  if (!Array.isArray(data)) throw new Error('O atendimento retornou uma lista de chamados inválida.')
+  return data as MaintenanceTicket[]
+}
+
+async function requestJson(url: string, init: RequestInit | undefined, failure: string): Promise<unknown> {
+  let res: Response
   try {
-    const res = await fetch(`${API_BASE}/properties/${propertyId}/tickets`)
-    if (res.ok) {
-      return await res.json()
-    }
+    res = await fetch(url, init)
   } catch {
-    // fallback
+    throw new Error(`${failure}. Não foi possível conectar ao atendimento.`)
   }
-  return []
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    const detail = typeof data?.detail === 'string' ? data.detail : `HTTP ${res.status}`
+    throw new Error(`${failure}: ${detail}`)
+  }
+  try {
+    return await res.json()
+  } catch {
+    throw new Error(`${failure}: resposta inválida do atendimento.`)
+  }
+}
+
+export async function fetchTicketsForProperty(propertyId: string): Promise<MaintenanceTicket[]> {
+  const data = await requestJson(`${API_BASE}/properties/${encodeURIComponent(propertyId)}/tickets`, undefined, 'Falha ao carregar chamados')
+  if (!Array.isArray(data)) throw new Error('O atendimento retornou uma lista de chamados inválida.')
+  return data as MaintenanceTicket[]
 }
 
 export async function fetchTicket(ticketId: string): Promise<MaintenanceTicket | null> {
@@ -77,101 +99,41 @@ export async function fetchTicket(ticketId: string): Promise<MaintenanceTicket |
 }
 
 export async function fetchQuotes(ticketId: string): Promise<Quote[]> {
-  try {
-    const res = await fetch(`${API_BASE}/tickets/${ticketId}/quotes`)
-    if (res.ok) {
-      return await res.json()
-    }
-  } catch {
-    // fallback
-  }
-  return []
+  const data = await requestJson(`${API_BASE}/tickets/${encodeURIComponent(ticketId)}/quotes`, undefined, 'Falha ao carregar orçamentos')
+  if (!Array.isArray(data)) throw new Error('O atendimento retornou uma lista de orçamentos inválida.')
+  return data as Quote[]
 }
 
-export async function approveQuote(
+async function postTicket(url: string, body: unknown, failure: string): Promise<MaintenanceTicket> {
+  const data = await requestJson(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  }, failure)
+  if (!data || typeof data !== 'object' || !('id' in data) || typeof data.id !== 'string' ||
+    !('status' in data) || typeof data.status !== 'string') {
+    throw new Error(`${failure}: resposta inválida do atendimento.`)
+  }
+  return data as MaintenanceTicket
+}
+
+export function approveQuote(
   ticketId: string,
   providerId: string,
   runId?: string,
 ): Promise<MaintenanceTicket> {
-  try {
-    const res = await fetch(`${API_BASE}/tickets/${ticketId}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider_id: providerId,
-        run_id: runId || `run-approve-${Date.now()}`,
-      }),
-    })
-    if (res.ok) {
-      return await res.json()
-    }
-    const err = await res.json().catch(() => null)
-    throw new Error(err?.detail ?? `Falha ao aprovar orçamento (HTTP ${res.status})`)
-  } catch (e: unknown) {
-    if (e instanceof Error && e.message.includes('Falha ao aprovar')) {
-      throw e
-    }
-    // Modo offline / mock fallback para testes locais
-  }
-  return {
-    id: ticketId,
-    run_id: runId || `run-approved-${Date.now()}`,
-    property_id: 'casa-aurora',
-    reported_by_role: 'tenant',
-    category: 'eletricista',
-    urgency: 'normal',
-    location_in_property: 'Banheiro',
-    description: 'Chuveiro sem água quente',
-    status: 'resolved',
-    selected_provider_id: providerId,
-    scheduled_date: 'amanhã, 9h',
-    notify_tenant: true,
-    created_at: new Date().toISOString(),
-  }
+  return postTicket(`${API_BASE}/tickets/${encodeURIComponent(ticketId)}/approve`, {
+    provider_id: providerId,
+    run_id: runId || `run-approve-${Date.now()}`,
+  }, 'Falha ao aprovar orçamento')
 }
 
-export async function startTicketResolution(ticketId: string): Promise<MaintenanceTicket> {
-  try {
-    const res = await fetch(`${API_BASE}/tickets/${ticketId}/start-resolution`, {
-      method: 'POST',
-    })
-    if (res.ok) {
-      return await res.json()
-    }
-    const err = await res.json().catch(() => null)
-    throw new Error(err?.detail ?? `Falha ao iniciar resolução (HTTP ${res.status})`)
-  } catch (e: unknown) {
-    if (e instanceof Error && e.message.includes('Falha ao iniciar')) {
-      throw e
-    }
-    // fallback
-  }
-  return {
-    id: ticketId,
-    run_id: `run-start-${Date.now()}`,
-    property_id: 'casa-aurora',
-    reported_by_role: 'tenant',
-    category: 'eletricista',
-    urgency: 'normal',
-    location_in_property: 'Banheiro',
-    description: 'Reparo em andamento',
-    status: 'awaiting_adm_approval',
-    notify_tenant: true,
-    created_at: new Date().toISOString(),
-  }
+export function startTicketResolution(ticketId: string): Promise<MaintenanceTicket> {
+  return postTicket(`${API_BASE}/tickets/${encodeURIComponent(ticketId)}/start-resolution`, undefined, 'Falha ao iniciar resolução')
 }
 
-async function postProviderReply(url: string, body: unknown): Promise<MaintenanceTicket> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const detail = await res.json().catch(() => null)
-    throw new Error(detail?.detail ?? `Status ${res.status}`)
-  }
-  return await res.json()
+function postProviderReply(url: string, body: unknown): Promise<MaintenanceTicket> {
+  return postTicket(url, body, 'Falha ao registrar resposta do prestador')
 }
 
 /** Prestador (canal simulado/allowlist) envia o orçamento pedido pelo Nó 3. */

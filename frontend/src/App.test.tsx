@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
@@ -6,6 +6,7 @@ import { parseRoute } from './routes'
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   window.history.replaceState(null, '', '/')
 })
 
@@ -56,32 +57,15 @@ describe('navegação por imóvel', () => {
     expect(screen.getByText('Escolha simulada')).toBeInTheDocument()
     expect(screen.getByText(/nenhuma contratação ou agendamento/)).toBeInTheDocument()
   })
-  it('permite ao anfitrião aprovar um orçamento na sessão ADM e avançar para agendamento', async () => {
+  it('não inventa chamados ou orçamentos quando o imóvel não tem atendimento', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(Response.json([]))))
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
     await user.click(screen.getByRole('link', { name: 'Agente ⇄ Anfitrião' }))
-
-    // Verifica que a síntese de orçamentos e cartões estão visíveis
-    expect(await screen.findByText(/Pedimos orçamento/)).toBeInTheDocument()
-    expect(screen.getByText('Carlos Eletricista')).toBeInTheDocument()
-    expect(screen.getByText('Volt Reparos')).toBeInTheDocument()
-
-    // Botão inicial de aprovação para Carlos
-    const approveBtn = screen.getByRole('button', { name: /Aprovar Carlos/ })
-    expect(approveBtn).toBeInTheDocument()
-
-    // Clica no cartão da Volt Reparos e vê o botão mudar
-    await user.click(screen.getByText('Volt Reparos'))
-    expect(screen.getByRole('button', { name: /Aprovar Volt Reparos/ })).toBeInTheDocument()
-
-    // Aprova o orçamento
-    await user.click(screen.getByRole('button', { name: /Aprovar Volt Reparos/ }))
-    expect(await screen.findByText(/Orçamento aprovado e agendamento confirmado/)).toBeInTheDocument()
-
-    // Volta ao chat e verifica o banner de visita marcada
-    await user.click(screen.getByRole('link', { name: 'Chat do imóvel' }))
-    expect(await screen.findByText(/Visita marcada/)).toBeInTheDocument()
+    expect(await screen.findByText('Nenhum chamado aberto')).toBeInTheDocument()
+    expect(screen.queryByText('Carlos Eletricista')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Aprovar/ })).not.toBeInTheDocument()
   })
 
   it('navega para o painel de auditoria & custos pela barra de navegação', async () => {

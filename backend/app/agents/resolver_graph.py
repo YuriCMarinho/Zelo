@@ -212,7 +212,6 @@ async def dispatch_or_fallback(state: ResolverState) -> dict[str, Any]:
                 timeout_minutes=PROVIDER_COLLECTION_TIMEOUT_MINUTES,
                 callback=on_provider_collection_timeout,
             )
-            _spawn(collect_and_resume(ticket_id, run_id, state["category"], city))
             return {"candidate_providers": [], "status": TicketStatus.NO_PROVIDERS_FALLBACK.value}
 
         cancel_timeout_job(f"timeout_providers_{ticket_id}")
@@ -995,6 +994,19 @@ class LangGraphResolverStarter:
                 "error": None,
             }
             result = await self.graph.ainvoke(initial_state, _thread(request.ticket_id))
+            # A coleta pode terminar imediatamente em modo fixture. Só a iniciamos
+            # após ainvoke persistir a pausa, para não perder o evento providers_ready.
+            if isinstance(result, dict) and result.get("status") == (
+                TicketStatus.NO_PROVIDERS_FALLBACK.value
+            ):
+                _spawn(
+                    collect_and_resume(
+                        ticket.id,
+                        request.run_id,
+                        ticket.category,
+                        _region_of(session, ticket.property_id),
+                    )
+                )
             return dict(result) if isinstance(result, dict) else {}
         finally:
             if db is None:

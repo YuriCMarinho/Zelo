@@ -13,6 +13,7 @@ interface ProviderSimulatorProps {
   currentTicketId?: string | null
   ticketStatus?: string | null
   onTicketUpdated: () => void
+  providerOnly?: boolean
 }
 
 // Respostas de exemplo dos prestadores (canal simulado; nada sai para terceiros).
@@ -27,6 +28,7 @@ export function ProviderSimulator({
   currentTicketId,
   ticketStatus,
   onTicketUpdated,
+  providerOnly = false,
 }: ProviderSimulatorProps) {
   const [running, setRunning] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -98,8 +100,10 @@ export function ProviderSimulator({
     setRunning(true)
     setFeedback(null)
     try {
-      await startTicketResolution(currentTicketId)
-      setFeedback('Nó 3 ativado: cotações solicitadas e síntese enviada para aprovação!')
+      const updated = await startTicketResolution(currentTicketId)
+      setFeedback(updated.status === 'no_providers_fallback'
+        ? 'A busca de prestadores continua. Aguarde a confirmação de um contato.'
+        : 'Atendimento atualizado. Aguarde as respostas dos prestadores.')
       onTicketUpdated()
     } catch (err: unknown) {
       setFeedback(`Erro ao iniciar resolução: ${err instanceof Error ? err.message : String(err)}`)
@@ -144,27 +148,39 @@ export function ProviderSimulator({
   function handleDateReply(accepted: boolean) {
     if (!currentTicketId) return
     void runProviderAction(async () => {
-      await submitDateResponse(
+      const updated = await submitDateResponse(
         currentTicketId,
         accepted,
         accepted ? 'Confirmo a data proposta.' : 'Não consigo nesta data.',
       )
       return accepted
         ? 'Prestador confirmou o dia. Chamado concluído e hóspede avisado se estiver no imóvel.'
-        : 'Prestador recusou. O agente vai propor a próxima janela da agenda.'
+        : updated.status === 'escalated_to_adm'
+          ? 'As tentativas de data se esgotaram. O chamado precisa da decisão do anfitrião.'
+          : 'Prestador recusou. O agente vai propor a próxima janela da agenda.'
     })
   }
 
   return (
-    <div className="simulator-box" aria-label="Simulador de cenários do avaliador">
+    <div className="simulator-box" aria-label={providerOnly ? 'Respostas do prestador na demonstração' : 'Simulador de cenários do avaliador'}>
       <div>
-        <h3 style={{ margin: '0 0 4px', fontSize: '17px' }}>Simulador de Cenários dos Agentes</h3>
+        <h3 style={{ margin: '0 0 4px', fontSize: '17px' }}>{providerOnly ? 'Respostas do prestador' : 'Simulador de Cenários dos Agentes'}</h3>
         <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)' }}>
-          Dispare cenários do Fluxo A e Fluxo C para acompanhar a máquina de estados em tempo real.
+          {providerOnly
+            ? 'Simule a resposta de quem fará o serviço. A aprovação do orçamento continua sendo uma ação separada do anfitrião. Nenhuma mensagem é enviada a terceiros.'
+            : 'Dispare cenários do Fluxo A e Fluxo C para acompanhar a máquina de estados em tempo real.'}
         </p>
       </div>
 
+      {providerOnly && ticketStatus === 'awaiting_adm_approval' && (
+        <p>Orçamento enviado. Aguarde a aprovação do anfitrião para confirmar uma data.</p>
+      )}
+      {providerOnly && ticketStatus === 'escalated_to_adm' && (
+        <p>O chamado precisa da análise do anfitrião antes de continuar.</p>
+      )}
+
       <div className="scenario-btns">
+        {!providerOnly && <>
         <button
           type="button"
           className="scenario-btn"
@@ -194,6 +210,8 @@ export function ProviderSimulator({
           <strong>Simular Descoberta (Nó S)</strong>
           <span>Relata pintura em RJ (sem prestador prévio): aciona Nó S para buscar e validar.</span>
         </button>
+
+        </>}
 
         {currentTicketId && (ticketStatus === 'waiting_quotes' || ticketStatus === 'requesting_quotes') && (
           <button
