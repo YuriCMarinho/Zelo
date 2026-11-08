@@ -41,6 +41,7 @@ class ProviderCandidate:
     phone: str
     source: str
     rating: float | None = None
+    source_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -245,6 +246,11 @@ class ProviderCollector:
             raise ValueError("Região inválida")
         if isinstance(self.source, GooglePlacesAdapter):
             reserve_places_call(db, run_id, settings.max_places_calls)
+        else:
+            from app.services.provider_browser import AgentBrowserAdapter
+
+            if isinstance(self.source, AgentBrowserAdapter):
+                reserve_browser_search(db, run_id, settings.max_browser_searches)
         candidates = await self.source.search(category, region.strip(), limit)
         confirmed = refused = skipped = 0
         provider_ids: list[str] = []
@@ -335,6 +341,20 @@ class ProviderCollector:
 
 def reserve_places_call(db: Session, run_id: str, max_calls: int) -> None:
     """Reserva uma tentativa no ledger antes da chamada paga, inclusive entre reinícios."""
+    _reserve_search(db, run_id, max_calls, "places_search", "Google Places")
+
+
+def reserve_browser_search(db: Session, run_id: str, max_calls: int) -> None:
+    _reserve_search(db, run_id, max_calls, "browser_search", "Agent Browser")
+
+
+def _reserve_search(
+    db: Session,
+    run_id: str,
+    max_calls: int,
+    event_type: str,
+    source: str,
+) -> None:
     bind = db.get_bind()
     with Session(bind) as quota_db:
         if bind.dialect.name == "postgresql":
@@ -343,18 +363,18 @@ def reserve_places_call(db: Session, run_id: str, max_calls: int) -> None:
             quota_db.scalar(
                 select(func.count(AuditEvent.id)).where(
                     AuditEvent.node == "scraper_nodeS",
-                    AuditEvent.event_type == "places_search",
+                    AuditEvent.event_type == event_type,
                 )
             )
             or 0
         )
         if used >= max_calls:
-            raise RuntimeError("Limite global de chamadas Google Places atingido")
+            raise RuntimeError(f"Limite global de chamadas {source} atingido")
         quota_db.add(
             AuditEvent(
                 run_id=run_id,
                 node="scraper_nodeS",
-                event_type="places_search",
+                event_type=event_type,
                 payload={},
             )
         )
@@ -362,10 +382,23 @@ def reserve_places_call(db: Session, run_id: str, max_calls: int) -> None:
 
 
 def make_collector() -> ProviderCollector:
-    if settings.provider_source == "google_places" and settings.llm_mode.lower() != "recorded_demo":
-        source: CandidateSource = GooglePlacesAdapter(
-            settings.google_places_api_key, max_calls=settings.max_places_calls
-        )
+    if (
+        settings.provider_source in {"agent_browser", "google_places"}
+        and settings.llm_mode.lower() != "recorded_demo"
+    ):
+        source: CandidateSource
+        if settings.provider_source == "agent_browser":
+            from app.services.provider_browser import AgentBrowserAdapter
+
+            source = AgentBrowserAdapter(
+                settings.agent_browser_command,
+                settings.browser_timeout_seconds,
+                settings.agent_browser_executable_path,
+            )
+        else:
+            source = GooglePlacesAdapter(
+                settings.google_places_api_key, max_calls=settings.max_places_calls
+            )
         allowed = {
             phone.strip()
             for phone in settings.provider_contact_allowlist.split(",")
@@ -392,7 +425,7 @@ def make_collector() -> ProviderCollector:
             },
         )
     else:
-        raise ValueError("PROVIDER_SOURCE deve ser fixture ou google_places")
+        raise ValueError("PROVIDER_SOURCE deve ser agent_browser, fixture ou google_places")
     return ProviderCollector(source, gateway)
 
 

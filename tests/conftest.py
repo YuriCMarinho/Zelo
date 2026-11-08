@@ -40,6 +40,7 @@ def bind_test_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.db.session.SessionLocal", TestingSessionLocal)
     monkeypatch.setattr("app.agents.resolver_graph.SessionLocal", TestingSessionLocal)
     monkeypatch.setattr("app.core.config.settings.llm_mode", "mock")
+    monkeypatch.setattr("app.core.config.settings.provider_source", "fixture")
     monkeypatch.setattr("app.core.config.settings.langfuse_public_key", "mock-public")
     monkeypatch.setattr("app.core.config.settings.langfuse_secret_key", "mock-secret")
 
