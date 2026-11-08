@@ -123,9 +123,7 @@ async def process_chat_message(
             detail=f"Violação de segurança nos guardrails: {err}",
         ) from err
 
-    sender_label = (
-        "camareira" if input_data.sender_role == ReportedByRole.CLEANER else "hospede"
-    )
+    sender_label = "camareira" if input_data.sender_role == ReportedByRole.CLEANER else "hospede"
     user_record = ChatMessageRecord(
         property_id=prop.id,
         session_id=session_id,
@@ -188,9 +186,7 @@ async def process_chat_message(
         except Exception as err:
             import logging
 
-            logging.getLogger(__name__).warning(
-                "Falha ao iniciar Nó 3 automaticamente: %s", err
-            )
+            logging.getLogger(__name__).warning("Falha ao iniciar Nó 3 automaticamente: %s", err)
 
     suggested = (
         ["Acompanhar status do chamado", "Enviar foto ou detalhe adicional"]

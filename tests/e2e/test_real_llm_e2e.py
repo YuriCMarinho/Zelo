@@ -107,9 +107,7 @@ async def test_featherless_client_parses_chat_completion_and_records_cost(
 
     # Confere gravação no banco de dados
     record = (
-        db_session.query(CostRecord)
-        .filter(CostRecord.run_id == "run-featherless-test-01")
-        .first()
+        db_session.query(CostRecord).filter(CostRecord.run_id == "run-featherless-test-01").first()
     )
     assert record is not None
     assert record.model == "Qwen/Qwen3.5-9B"

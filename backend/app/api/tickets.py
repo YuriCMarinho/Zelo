@@ -145,8 +145,7 @@ async def start_ticket_resolution(
     response_model=MaintenanceTicketRead,
     summary="Aprovação de orçamento pelo ADM",
     description=(
-        "Permite ao administrador aprovar um orçamento para "
-        "destravar a máquina de estados do Nó 3."
+        "Permite ao administrador aprovar um orçamento para destravar a máquina de estados do Nó 3."
     ),
 )
 async def approve_ticket_quote(
@@ -203,9 +202,7 @@ async def approve_ticket_quote(
         ) from e
 
     db.expire_all()
-    refreshed_ticket = (
-        db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
-    )
+    refreshed_ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
     if not refreshed_ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

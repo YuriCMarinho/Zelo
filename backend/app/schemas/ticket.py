@@ -46,7 +46,9 @@ class TicketUpdateRequest(BaseSchema):
 class TicketApprovalRequest(BaseSchema):
     run_id: str | None = Field(
         default=None,
-        description="UUID ou identificador da execução ponta a ponta. Se omitido, usa o run_id do ticket.",
+        description=(
+            "UUID ou identificador da execução ponta a ponta. Se omitido, usa o run_id do ticket."
+        ),
     )
     provider_id: str = Field(..., min_length=1)
 

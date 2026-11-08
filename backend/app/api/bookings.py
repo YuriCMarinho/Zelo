@@ -5,6 +5,7 @@ aprovar hospedagens pelo valor acordado (R$ X) ou recusar com justificativa,
 disparando notificação automática no canal de chat da sessão do hóspede.
 """
 
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,10 +20,35 @@ from app.schemas.booking import (
     BookingRead,
     BookingRejectRequest,
 )
+from app.security.guardrails import SecurityViolationError, validate_untrusted_input
 
 bookings_router = APIRouter(prefix="/api", tags=["Reservas"])
 
 DatabaseDep = Annotated[Session, Depends(get_db)]
+
+RUN_ID_FROM_NOTES_PATTERN = re.compile(r"run_id:\s*([A-Za-z0-9_-]+)")
+
+
+def _resolve_booking_run_id(booking: Booking, fallback_prefix: str) -> str:
+    """Extrai o run_id original registrado nas notas da reserva ou gera fallback."""
+    if booking.notes:
+        match = RUN_ID_FROM_NOTES_PATTERN.search(booking.notes)
+        if match:
+            return match.group(1)
+    return f"{fallback_prefix}-{booking.id[:8]}"
+
+
+def _sanitize_field(value: str | None, role: str, run_id: str) -> str | None:
+    """Aplica guardrail contra prompt injection em campos textuais de reserva."""
+    if value is None or not value.strip():
+        return value
+    try:
+        return validate_untrusted_input(value, role=role, run_id=run_id)
+    except SecurityViolationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @bookings_router.get(
@@ -96,33 +122,35 @@ def create_booking(
         .first()
     )
     if conflict:
+        c_start = conflict.start_date.strftime("%d/%m/%Y")
+        c_end = conflict.end_date.strftime("%d/%m/%Y")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Conflito de agenda: já existe reserva confirmada entre "
-                f"{conflict.start_date.strftime('%d/%m/%Y')} e {conflict.end_date.strftime('%d/%m/%Y')}."
-            ),
+            detail=f"Conflito de agenda: já existe reserva confirmada entre {c_start} e {c_end}.",
         )
+
+    run_id = f"run-book-create-{payload.property_id[:8]}"
+    safe_guest_name = _sanitize_field(payload.guest_name, "tenant", run_id) or payload.guest_name
+    safe_guest_contact = _sanitize_field(payload.guest_contact, "tenant", run_id)
+    safe_notes = _sanitize_field(payload.notes, "tenant", run_id)
 
     nights = max(1, (payload.end_date - payload.start_date).days)
     nightly_rate = getattr(prop, "nightly_rate", 350.0) or 350.0
     total_price = (
-        payload.total_price
-        if payload.total_price is not None
-        else round(nights * nightly_rate, 2)
+        payload.total_price if payload.total_price is not None else round(nights * nightly_rate, 2)
     )
 
     booking = Booking(
         property_id=payload.property_id,
-        guest_name=payload.guest_name,
-        guest_contact=payload.guest_contact,
+        guest_name=safe_guest_name,
+        guest_contact=safe_guest_contact,
         start_date=payload.start_date,
         end_date=payload.end_date,
         status=payload.status,
         total_price=total_price,
         num_guests=payload.num_guests,
         session_id=payload.session_id or "default",
-        notes=payload.notes,
+        notes=safe_notes,
     )
     db.add(booking)
     db.commit()
@@ -163,14 +191,17 @@ def approve_booking(
         .first()
     )
     if conflict:
+        c_start = conflict.start_date.strftime("%d/%m/%Y")
+        c_end = conflict.end_date.strftime("%d/%m/%Y")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Não é possível aprovar: já existe outra reserva confirmada de "
-                f"{conflict.start_date.strftime('%d/%m/%Y')} a {conflict.end_date.strftime('%d/%m/%Y')}."
+                "Não é possível aprovar: já existe outra reserva confirmada de "
+                f"{c_start} a {c_end}."
             ),
         )
 
+    run_id = _resolve_booking_run_id(booking, "run-book-approve")
     nights = max(1, (booking.end_date - booking.start_date).days)
     nightly_rate = getattr(prop, "nightly_rate", 350.0) if prop else 350.0
     final_price = (
@@ -183,13 +214,17 @@ def approve_booking(
     booking.total_price = final_price
     booking.rejection_reason = None
     if payload and payload.host_notes:
-        booking.notes = f"{booking.notes or ''} | Nota do anfitrião: {payload.host_notes}".strip(" |")
+        safe_host_notes = _sanitize_field(payload.host_notes, "admin", run_id)
+        booking.notes = f"{booking.notes or ''} | Nota do anfitrião: {safe_host_notes}".strip(" |")
 
+    diarias_lbl = "diária" if nights == 1 else "diárias"
+    s_fmt = booking.start_date.strftime("%d/%m/%Y")
+    e_fmt = booking.end_date.strftime("%d/%m/%Y")
     notification_text = (
         f"Excelente notícia! O anfitrião aprovou sua reserva para o imóvel '{prop_name}' "
-        f"de {booking.start_date.strftime('%d/%m/%Y')} a {booking.end_date.strftime('%d/%m/%Y')} "
-        f"({nights} {'diária' if nights == 1 else 'diárias'}) pelo valor de {_format_brl(final_price)}. "
-        f"Sua estadia está confirmada! Você já pode consultar as regras e horários de check-in por aqui."
+        f"de {s_fmt} a {e_fmt} ({nights} {diarias_lbl}) pelo valor de "
+        f"{_format_brl(final_price)}. Sua estadia está confirmada! "
+        "Você já pode consultar as regras e horários de check-in por aqui."
     )
 
     chat_msg = ChatMessageRecord(
@@ -203,14 +238,14 @@ def approve_booking(
     db.add(chat_msg)
 
     audit = AuditEvent(
-        run_id=f"run-book-approve-{booking.id[:8]}",
+        run_id=run_id,
         ticket_id=None,
         node="commercial_governance",
         event_type="booking_approved",
         payload={
             "booking_id": booking.id,
             "property_id": booking.property_id,
-            "guest_name": booking.guest_name,
+            "guest_ref": f"guest-{booking.id[:8]}",
             "start_date": booking.start_date.isoformat(),
             "end_date": booking.end_date.isoformat(),
             "total_price": final_price,
@@ -240,18 +275,21 @@ def reject_booking(
             detail=f"Reserva '{booking_id}' não encontrada.",
         )
 
+    run_id = _resolve_booking_run_id(booking, "run-book-reject")
     prop = db.query(Property).filter(Property.id == booking.property_id).first()
     prop_name = prop.name if prop else booking.property_id
-    reason = payload.reason.strip()
+    reason = _sanitize_field(payload.reason.strip(), "admin", run_id) or payload.reason.strip()
 
     booking.status = "rejected"
     booking.rejection_reason = reason
 
+    s_fmt = booking.start_date.strftime("%d/%m/%Y")
+    e_fmt = booking.end_date.strftime("%d/%m/%Y")
     notification_text = (
-        f"Atualização sobre sua solicitação para '{prop_name}' "
-        f"({booking.start_date.strftime('%d/%m/%Y')} a {booking.end_date.strftime('%d/%m/%Y')}): "
-        f"o anfitrião não pôde aceitar a reserva para este período. "
-        f"Motivo informado: {reason}. Gostaria de verificar outras datas disponíveis no calendário?"
+        f"Atualização sobre sua solicitação para '{prop_name}' ({s_fmt} a {e_fmt}): "
+        "o anfitrião não pôde aceitar a reserva para este período. "
+        f"Motivo informado: {reason}. "
+        "Gostaria de verificar outras datas disponíveis no calendário?"
     )
 
     chat_msg = ChatMessageRecord(
@@ -265,14 +303,14 @@ def reject_booking(
     db.add(chat_msg)
 
     audit = AuditEvent(
-        run_id=f"run-book-reject-{booking.id[:8]}",
+        run_id=run_id,
         ticket_id=None,
         node="commercial_governance",
         event_type="booking_rejected",
         payload={
             "booking_id": booking.id,
             "property_id": booking.property_id,
-            "guest_name": booking.guest_name,
+            "guest_ref": f"guest-{booking.id[:8]}",
             "start_date": booking.start_date.isoformat(),
             "end_date": booking.end_date.isoformat(),
             "rejection_reason": reason,

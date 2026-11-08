@@ -235,7 +235,7 @@ async def test_commercial_faq_response(db_session: Session, sample_property: Pro
 async def test_commercial_booking_creation_and_persistence(
     db_session: Session, sample_property: Property
 ) -> None:
-    """Nó 1 detecta intenção de reserva, calcula valor e persiste o Booking como pending_approval."""
+    """Nó 1 detecta intenção de reserva, calcula valor e cria Booking pending_approval."""
     start_date = date.today() + timedelta(days=20)
     end_date = start_date + timedelta(days=4)
     msg = (
@@ -623,7 +623,7 @@ async def test_commercial_check_in_time_ignores_access_method(
 async def test_commercial_natural_language_dates_and_single_checkin_clarification(
     db_session: Session, sample_property: Property
 ) -> None:
-    """Agente Comercial pede data de saída se só houver data de entrada e aceita linguagem natural."""
+    """Agente Comercial pede check-out se só houver entrada e aceita linguagem natural."""
     # Caso 1: apenas data de entrada -> solicita data de check-out
     out_single = await handle_commercial_message(
         prop=sample_property,
@@ -650,11 +650,30 @@ async def test_commercial_natural_language_dates_and_single_checkin_clarificatio
     assert booking.start_date == date(2027, 12, 10)
     assert booking.end_date == date(2027, 12, 14)
 
+    # Caso 3: pergunta geral de FAQ no turno seguinte NÃO deve recriar reserva duplicada
+    out_faq_followup = await handle_commercial_message(
+        prop=sample_property,
+        message="Aceita pet de pequeno porte?",
+        run_id="run-faq-followup",
+        db=db_session,
+        history=[
+            {
+                "role": "user",
+                "content": "Quero reservar de 10 a 14 de dezembro de 2027",
+            },
+            {
+                "role": "assistant",
+                "content": out_nat.response_text,
+            },
+        ],
+    )
+    assert out_faq_followup.booking_id is None
+
 
 def test_booking_host_approve_and_reject_with_chat_notifications(
     client: TestClient, sample_property: Property
 ) -> None:
-    """Fluxo ponta a ponta: Hóspede solicita reserva -> Anfitrião aprova ou recusa -> Notificação no Chat."""
+    """Fluxo E2E: Hóspede solicita reserva -> Anfitrião aprova ou recusa -> Chat notificado."""
     session_id = "sess-jurado-recife"
     start_d = (date.today() + timedelta(days=50)).strftime("%d/%m/%Y")
     end_d = (date.today() + timedelta(days=53)).strftime("%d/%m/%Y")

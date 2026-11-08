@@ -19,9 +19,10 @@ def _ensure_schema_columns(db: Session) -> None:
         if "properties" in tables:
             prop_cols = {c["name"] for c in inspector.get_columns("properties")}
             if "nightly_rate" not in prop_cols:
-                db.execute(
-                    text("ALTER TABLE properties ADD COLUMN nightly_rate FLOAT NOT NULL DEFAULT 350.0")
+                alter_sql = (
+                    "ALTER TABLE properties ADD COLUMN nightly_rate FLOAT NOT NULL DEFAULT 350.0"
                 )
+                db.execute(text(alter_sql))
 
         if "bookings" in tables:
             book_cols = {c["name"] for c in inspector.get_columns("bookings")}
@@ -111,11 +112,12 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     id=prop_recife_id,
                     name="Studio Tech Porto Digital - Recife Antigo",
                     description=(
-                        "Studio moderno e tecnológico no coração do Porto Digital, a 200m do Marco Zero "
-                        "e dos armazéns criativos do Recife Antigo. Equipado com internet dedicada de 500Mbps, "
-                        "workstation com monitor externo, fechadura inteligente 24h, ar-condicionado inverter silencioso "
-                        "e vista para o Rio Capibaribe. Perfeito para nômades digitais, imersões de tecnologia, "
-                        "hackathons ou estadias produtivas de final de semana."
+                        "Studio moderno e tecnológico no coração do Porto Digital, "
+                        "a 200m do Marco Zero e dos armazéns criativos do Recife Antigo. "
+                        "Equipado com internet dedicada de 500Mbps, workstation com monitor "
+                        "externo, fechadura inteligente 24h, ar-condicionado inverter silencioso "
+                        "e vista para o Rio Capibaribe. Perfeito para nômades digitais, "
+                        "imersões de tecnologia, hackathons ou estadias de final de semana."
                     ),
                     address="Cais do Apolo, 222 - Bairro do Recife",
                     city="Recife",
@@ -124,7 +126,8 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     rules_faq=(
                         "Check-in autônomo 24h via fechadura digital inteligente com token. "
                         "Wi-Fi dedicado ultra-rápido (SSID: PortoDigital_Tech, 500Mbps simétrico). "
-                        "Silêncio após as 22h. Não fumar no interior do estúdio. Pets de pequeno porte são bem-vindos."
+                        "Silêncio após as 22h. Não fumar no interior do estúdio. "
+                        "Pets de pequeno porte são bem-vindos."
                     ),
                 )
             )

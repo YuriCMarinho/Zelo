@@ -134,4 +134,3 @@ if static_dir and os.path.exists(os.path.join(static_dir, "index.html")):
         if full_path and os.path.isfile(candidate):
             return FileResponse(candidate)
         return FileResponse(os.path.join(resolved_static_dir, "index.html"))
-

@@ -5,6 +5,7 @@ import {
   fetchPropertyBookings,
   fetchQuotes,
   fetchTicketsForProperty,
+  getSessionId,
   rejectBooking,
 } from '../api/client'
 import {
@@ -144,18 +145,25 @@ export function PropertyWorkspace({
       const approved = await approveBooking(booking.id, finalPrice)
       const nights = calcNights(approved.start_date, approved.end_date)
       const priceValue = approved.total_price ?? nights * property.nightlyRate
+      const currentSession = getSessionId()
 
-      onNewMessage({
-        id: crypto.randomUUID(),
-        propertyId: property.id,
-        channel: 'guest',
-        sender: 'agent',
-        body: `Excelente notícia! O anfitrião aprovou sua reserva para o imóvel '${property.title}' de ${formatBrDate(approved.start_date)} a ${formatBrDate(approved.end_date)} (${nights} ${nights === 1 ? 'diária' : 'diárias'}) pelo valor de ${moneyBrl(priceValue)}. Sua estadia está confirmada!`,
-        time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(
-          new Date(),
-        ),
-        bookingId: approved.id,
-      })
+      if (
+        !approved.session_id ||
+        approved.session_id === 'default' ||
+        approved.session_id === currentSession
+      ) {
+        onNewMessage({
+          id: crypto.randomUUID(),
+          propertyId: property.id,
+          channel: 'guest',
+          sender: 'agent',
+          body: `Excelente notícia! O anfitrião aprovou sua reserva para o imóvel '${property.title}' de ${formatBrDate(approved.start_date)} a ${formatBrDate(approved.end_date)} (${nights} ${nights === 1 ? 'diária' : 'diárias'}) pelo valor de ${moneyBrl(priceValue)}. Sua estadia está confirmada! Você já pode consultar as regras e horários de check-in por aqui.`,
+          time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(
+            new Date(),
+          ),
+          bookingId: approved.id,
+        })
+      }
       setBookingFeedback(
         `Reserva de ${approved.guest_name} (${formatBrDate(approved.start_date)} a ${formatBrDate(approved.end_date)}) confirmada por ${moneyBrl(priceValue)}!`,
       )
@@ -173,17 +181,24 @@ export function PropertyWorkspace({
     setBookingFeedback('')
     try {
       const rejected = await rejectBooking(booking.id, reason)
-      onNewMessage({
-        id: crypto.randomUUID(),
-        propertyId: property.id,
-        channel: 'guest',
-        sender: 'agent',
-        body: `Atualização sobre sua solicitação para '${property.title}' (${formatBrDate(rejected.start_date)} a ${formatBrDate(rejected.end_date)}): o anfitrião não pôde aceitar a reserva para este período. Motivo informado: ${reason}. Gostaria de verificar outras datas disponíveis?`,
-        time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(
-          new Date(),
-        ),
-        bookingId: rejected.id,
-      })
+      const currentSession = getSessionId()
+      if (
+        !rejected.session_id ||
+        rejected.session_id === 'default' ||
+        rejected.session_id === currentSession
+      ) {
+        onNewMessage({
+          id: crypto.randomUUID(),
+          propertyId: property.id,
+          channel: 'guest',
+          sender: 'agent',
+          body: `Atualização sobre sua solicitação para '${property.title}' (${formatBrDate(rejected.start_date)} a ${formatBrDate(rejected.end_date)}): o anfitrião não pôde aceitar a reserva para este período. Motivo informado: ${reason}. Gostaria de verificar outras datas disponíveis no calendário?`,
+          time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(
+            new Date(),
+          ),
+          bookingId: rejected.id,
+        })
+      }
       setRejectingBookingId(null)
       setRejectionReason('')
       setBookingFeedback(

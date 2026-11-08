@@ -302,7 +302,10 @@ async def handle_maintenance_message(
     urgency_label = "URGENTE" if urgency == TicketUrgency.URGENT else "NORMAL"
     safety_note = ""
     if any(k in text_lower for k in ("faísca", "faisca", "choque", "curto")):
-        safety_note = " Por segurança, recomendamos não utilizar o ponto elétrico até a chegada do profissional."
+        safety_note = (
+            " Por segurança, recomendamos não utilizar o ponto elétrico "
+            "até a chegada do profissional."
+        )
     elif any(k in text_lower for k in ("gás", "gas")):
         safety_note = " Por segurança, feche o registro de gás e mantenha o ambiente ventilado."
 

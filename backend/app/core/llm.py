@@ -21,6 +21,7 @@ from app.core.budget import (
 )
 from app.core.config import settings
 from app.demo.replay import replay
+
 # langfuse_client é importado sob demanda em generate() para evitar circular import
 from app.observability.logger import logger
 

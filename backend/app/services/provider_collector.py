@@ -339,12 +339,15 @@ def reserve_places_call(db: Session, run_id: str, max_calls: int) -> None:
     with Session(bind) as quota_db:
         if bind.dialect.name == "postgresql":
             quota_db.execute(text("SELECT pg_advisory_xact_lock(20261107)"))
-        used = quota_db.scalar(
-            select(func.count(AuditEvent.id)).where(
-                AuditEvent.node == "scraper_nodeS",
-                AuditEvent.event_type == "places_search",
+        used = (
+            quota_db.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.node == "scraper_nodeS",
+                    AuditEvent.event_type == "places_search",
+                )
             )
-        ) or 0
+            or 0
+        )
         if used >= max_calls:
             raise RuntimeError("Limite global de chamadas Google Places atingido")
         quota_db.add(

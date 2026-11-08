@@ -15,9 +15,7 @@ if TYPE_CHECKING:
 class Provider(Base):
     __tablename__ = "providers"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     region: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
@@ -30,9 +28,7 @@ class Provider(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    quotes: Mapped[list["Quote"]] = relationship(
-        "Quote", back_populates="provider"
-    )
+    quotes: Mapped[list["Quote"]] = relationship("Quote", back_populates="provider")
     selected_tickets: Mapped[list["MaintenanceTicket"]] = relationship(
         "MaintenanceTicket", back_populates="selected_provider"
     )

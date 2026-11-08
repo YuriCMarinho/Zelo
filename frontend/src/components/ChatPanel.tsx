@@ -67,10 +67,18 @@ export function ChatPanel({
     async function syncHistory() {
       const history = await fetchChatHistory(property.id, activeChannel, sessionId)
       if (!active || !history.length) return
+      const normalizeText = (s: string) => s.replace(/\s+/g, ' ').trim()
       for (const item of history) {
         if (seenRemoteIdsRef.current.has(item.id)) continue
+        const normItemBody = normalizeText(item.body)
         const alreadyInLocal = messages.some(
-          (m) => m.propertyId === property.id && m.body === item.body,
+          (m) =>
+            m.id === item.id ||
+            (m.propertyId === property.id && normalizeText(m.body) === normItemBody) ||
+            (Boolean(item.booking_id) &&
+              m.bookingId === item.booking_id &&
+              m.sender === 'agent' &&
+              normalizeText(m.body).slice(0, 24) === normItemBody.slice(0, 24)),
         )
         seenRemoteIdsRef.current.add(item.id)
         if (!alreadyInLocal && item.sender === 'agent') {

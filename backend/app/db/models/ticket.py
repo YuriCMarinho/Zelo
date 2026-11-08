@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 class MaintenanceTicket(Base):
     __tablename__ = "maintenance_tickets"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     run_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     property_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True
@@ -28,15 +26,11 @@ class MaintenanceTicket(Base):
     urgency: Mapped[str] = mapped_column(String(20), default="normal", nullable=False, index=True)
     location_in_property: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(50), default="triaging", nullable=False, index=True
-    )
+    status: Mapped[str] = mapped_column(String(50), default="triaging", nullable=False, index=True)
     selected_provider_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("providers.id", ondelete="SET NULL"), nullable=True
     )
-    scheduled_date: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    scheduled_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notify_tenant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(

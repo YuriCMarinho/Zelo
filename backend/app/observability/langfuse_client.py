@@ -120,12 +120,8 @@ class LangfuseClientWrapper:
                         "unit": "TOKENS",
                     },
                     usage_details={
-                        "input_cost": (
-                            cost_usd * (input_tokens / max(1, total_tokens))
-                        ),
-                        "output_cost": (
-                            cost_usd * (output_tokens / max(1, total_tokens))
-                        ),
+                        "input_cost": (cost_usd * (input_tokens / max(1, total_tokens))),
+                        "output_cost": (cost_usd * (output_tokens / max(1, total_tokens))),
                         "total_cost": cost_usd,
                     },
                 )

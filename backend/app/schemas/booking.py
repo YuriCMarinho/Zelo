@@ -17,7 +17,9 @@ class BookingBase(BaseSchema):
     )
     total_price: float | None = Field(default=None, description="Valor total da proposta em R$")
     num_guests: int = Field(default=2, ge=1, description="Quantidade de hóspedes")
-    rejection_reason: str | None = Field(default=None, description="Motivo de recusa pelo anfitrião")
+    rejection_reason: str | None = Field(
+        default=None, description="Motivo de recusa pelo anfitrião"
+    )
     session_id: str | None = Field(default=None, description="Sessão anônima do hóspede")
     notes: str | None = None
 

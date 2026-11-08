@@ -7,6 +7,7 @@ calcula o valor total (diárias x noites ou proposta do cliente) e submete a
 solicitação como 'pending_approval' para decisão explícita do anfitrião.
 """
 
+import contextlib
 import re
 from datetime import date, datetime, timedelta
 from typing import Final
@@ -26,9 +27,7 @@ RESERVATION_INTENT_PATTERN: Final[re.Pattern[str]] = re.compile(
 
 DATE_ISO_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 DATE_BR_FULL_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(\d{1,2}/\d{1,2}/\d{4})\b")
-DATE_BR_SHORT_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\b(\d{1,2}/\d{1,2})(?!/\d)\b"
-)
+DATE_BR_SHORT_PATTERN: Final[re.Pattern[str]] = re.compile(r"\b(\d{1,2}/\d{1,2})(?!/\d)\b")
 
 MONTHS_PT: Final[dict[str, int]] = {
     "janeiro": 1,
@@ -59,8 +58,8 @@ MONTHS_PT: Final[dict[str, int]] = {
 }
 
 NATURAL_RANGE_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:de|do dia|entre|dia)?\s*(\d{1,2})\s*(?:a|até|ate|ao dia|e)\s*(\d{1,2})\s+de\s+([a-zç]+)"
-    r"(?:\s+de\s+(\d{4}))?\b",
+    r"\b(?:de|do dia|entre|dia)?\s*(\d{1,2})\s*(?:a|até|ate|ao dia|e)\s*"
+    r"(\d{1,2})\s+de\s+([a-zç]+)(?:\s+de\s+(\d{4}))?\b",
     re.IGNORECASE,
 )
 
@@ -131,34 +130,53 @@ def _next_weekend_dates(ref_date: date | None = None) -> tuple[date, date]:
     return (start, end)
 
 
+def _extract_single_date_token(message: str, today: date | None = None) -> date | None:
+    """Extrai uma única data explícita (ISO, DD/MM/YYYY ou DD/MM) de um texto."""
+    ref = today or date.today()
+    iso_matches = DATE_ISO_PATTERN.findall(message)
+    if len(iso_matches) == 1:
+        with contextlib.suppress(ValueError):
+            return datetime.strptime(iso_matches[0], "%Y-%m-%d").date()
+
+    br_matches = DATE_BR_FULL_PATTERN.findall(message)
+    if len(br_matches) == 1:
+        with contextlib.suppress(ValueError):
+            return datetime.strptime(br_matches[0], "%d/%m/%Y").date()
+
+    short_matches = DATE_BR_SHORT_PATTERN.findall(message)
+    if len(short_matches) == 1:
+        with contextlib.suppress(ValueError):
+            day1, month1 = map(int, short_matches[0].split("/"))
+            candidate = date(ref.year, month1, day1)
+            return candidate if candidate >= ref else date(ref.year + 1, month1, day1)
+
+    return None
+
+
 def _extract_dates_from_message(message: str) -> tuple[date, date] | None:
-    """Extrai intervalo de datas (início e término) da mensagem em formatos ISO, BR ou natural."""
+    """Extrai intervalo de datas (início e término) em formatos ISO, BR ou natural."""
     today = date.today()
 
     # 1. Formato ISO (YYYY-MM-DD)
     iso_matches = DATE_ISO_PATTERN.findall(message)
     if len(iso_matches) >= 2:
-        try:
+        with contextlib.suppress(ValueError):
             d1 = datetime.strptime(iso_matches[0], "%Y-%m-%d").date()
             d2 = datetime.strptime(iso_matches[1], "%Y-%m-%d").date()
             return (d1, d2) if d1 <= d2 else (d2, d1)
-        except ValueError:
-            pass
 
     # 2. Formato BR Completo (DD/MM/YYYY)
     br_matches = DATE_BR_FULL_PATTERN.findall(message)
     if len(br_matches) >= 2:
-        try:
+        with contextlib.suppress(ValueError):
             d1 = datetime.strptime(br_matches[0], "%d/%m/%Y").date()
             d2 = datetime.strptime(br_matches[1], "%d/%m/%Y").date()
             return (d1, d2) if d1 <= d2 else (d2, d1)
-        except ValueError:
-            pass
 
     # 3. Formato BR Curto (DD/MM)
     short_matches = DATE_BR_SHORT_PATTERN.findall(message)
     if len(short_matches) >= 2:
-        try:
+        with contextlib.suppress(ValueError):
             day1, month1 = map(int, short_matches[0].split("/"))
             day2, month2 = map(int, short_matches[1].split("/"))
             year1 = today.year
@@ -169,8 +187,6 @@ def _extract_dates_from_message(message: str) -> tuple[date, date] | None:
             year2 = year1 if month2 >= month1 else year1 + 1
             d2 = date(year2, month2, day2)
             return (d1, d2) if d1 <= d2 else (d2, d1)
-        except ValueError:
-            pass
 
     # 4. Linguagem natural ("15 a 18 de dezembro")
     nat_match = NATURAL_RANGE_PATTERN.search(message)
@@ -178,7 +194,7 @@ def _extract_dates_from_message(message: str) -> tuple[date, date] | None:
         day1_str, day2_str, month_name, year_str = nat_match.groups()
         month_num = MONTHS_PT.get(month_name.lower())
         if month_num:
-            try:
+            with contextlib.suppress(ValueError):
                 year_num = int(year_str) if year_str else today.year
                 d1 = date(year_num, month_num, int(day1_str))
                 if not year_str and d1 < today:
@@ -188,31 +204,9 @@ def _extract_dates_from_message(message: str) -> tuple[date, date] | None:
                 if d2 < d1:
                     d2 = date(year_num + 1, month_num, int(day2_str))
                 return (d1, d2)
-            except ValueError:
-                pass
 
     # 5. Uma única data + quantidade de noites/diárias ("dia 20/12 por 3 noites")
-    single_date: date | None = None
-    if len(iso_matches) == 1:
-        try:
-            single_date = datetime.strptime(iso_matches[0], "%Y-%m-%d").date()
-        except ValueError:
-            pass
-    elif len(br_matches) == 1:
-        try:
-            single_date = datetime.strptime(br_matches[0], "%d/%m/%Y").date()
-        except ValueError:
-            pass
-    elif len(short_matches) == 1:
-        try:
-            day1, month1 = map(int, short_matches[0].split("/"))
-            year1 = today.year
-            single_date = date(year1, month1, day1)
-            if single_date < today:
-                single_date = date(year1 + 1, month1, day1)
-        except ValueError:
-            pass
-
+    single_date = _extract_single_date_token(message, today)
     nights_match = NIGHTS_PATTERN.search(message)
     if single_date is not None and nights_match:
         nights = max(1, int(nights_match.group(1)))
@@ -239,28 +233,7 @@ def _extract_single_checkin_date(message: str) -> date | None:
     """Detecta se o cliente informou apenas a data de entrada sem data de saída."""
     if _extract_dates_from_message(message) is not None:
         return None
-    today = date.today()
-    iso_matches = DATE_ISO_PATTERN.findall(message)
-    if len(iso_matches) == 1:
-        try:
-            return datetime.strptime(iso_matches[0], "%Y-%m-%d").date()
-        except ValueError:
-            pass
-    br_matches = DATE_BR_FULL_PATTERN.findall(message)
-    if len(br_matches) == 1:
-        try:
-            return datetime.strptime(br_matches[0], "%d/%m/%Y").date()
-        except ValueError:
-            pass
-    short_matches = DATE_BR_SHORT_PATTERN.findall(message)
-    if len(short_matches) == 1:
-        try:
-            day1, month1 = map(int, short_matches[0].split("/"))
-            d = date(today.year, month1, day1)
-            return d if d >= today else date(today.year + 1, month1, day1)
-        except ValueError:
-            pass
-    return None
+    return _extract_single_date_token(message)
 
 
 def _extract_guests_count(text: str) -> int:
@@ -278,16 +251,16 @@ def _extract_proposed_price(text: str) -> float | None:
     match = PROPOSED_PRICE_PATTERN.search(text)
     if match:
         raw = match.group(1).replace(".", "").replace(",", ".")
-        try:
+        with contextlib.suppress(ValueError):
             val = float(raw)
             if val >= 50:
                 return val
-        except ValueError:
-            pass
     return None
 
 
-def _find_next_free_window(db: Session, property_id: str, after_date: date, nights: int = 3) -> tuple[date, date]:
+def _find_next_free_window(
+    db: Session, property_id: str, after_date: date, nights: int = 3
+) -> tuple[date, date]:
     """Encontra a próxima janela livre após uma data ocupada."""
     candidate_start = max(after_date, date.today() + timedelta(days=1))
     for _ in range(30):
@@ -322,14 +295,26 @@ async def handle_commercial_message(
     diária do imóvel (ou proposta do cliente) e submete o pedido para aprovação do anfitrião.
     """
     history_list = history or []
-    combined_user_context = " ".join(
-        [h["content"] for h in history_list if h.get("role") == "user"] + [message]
+    user_history_texts = [h["content"] for h in history_list if h.get("role") == "user"]
+    combined_user_context = " ".join(user_history_texts + [message])
+    recent_two_turns = " ".join(user_history_texts[-1:] + [message])
+
+    assistant_messages = [
+        h["content"].lower() for h in history_list if h.get("role") == "assistant"
+    ]
+    last_assistant_msg = assistant_messages[-1] if assistant_messages else ""
+    awaiting_dates_from_user = any(
+        cue in last_assistant_msg
+        for cue in (
+            "quais datas",
+            "data de check-out",
+            "quantas diárias",
+            "quais outras datas",
+        )
     )
 
     has_reservation_intent = bool(RESERVATION_INTENT_PATTERN.search(message))
-    history_has_reservation_intent = bool(
-        RESERVATION_INTENT_PATTERN.search(combined_user_context)
-    )
+    history_has_reservation_intent = bool(RESERVATION_INTENT_PATTERN.search(combined_user_context))
 
     if (
         CHECK_IN_PATTERN.search(message)
@@ -359,18 +344,26 @@ async def handle_commercial_message(
             suggested_actions=["Consultar regras do imóvel", "Falar com o anfitrião"],
         )
 
-    extracted = _extract_dates_from_message(message)
-    if extracted is None and history_list:
-        extracted = _extract_dates_from_message(combined_user_context)
-
+    current_extracted = _extract_dates_from_message(message)
     single_checkin = _extract_single_checkin_date(message)
 
+    # Só combina com o turno anterior se a mensagem atual tem intenção explícita de reserva
+    # ou se o assistente acabou de pedir complemento de datas (ex: check-out ou nº de diárias)
+    extracted = current_extracted
+    if extracted is None and (has_reservation_intent or awaiting_dates_from_user):
+        extracted = _extract_dates_from_message(recent_two_turns)
+
     # Se o usuário enviou apenas a data de entrada (sem saída) durante intenção de reserva
-    if (has_reservation_intent or history_has_reservation_intent) and extracted is None and single_checkin is not None:
+    if (
+        (has_reservation_intent or (history_has_reservation_intent and awaiting_dates_from_user))
+        and extracted is None
+        and single_checkin is not None
+    ):
         sug_end_2 = single_checkin + timedelta(days=2)
         sug_end_3 = single_checkin + timedelta(days=3)
+        start_fmt = single_checkin.strftime("%d/%m/%Y")
         ask_checkout_msg = (
-            f"Anotei o check-in para {single_checkin.strftime('%d/%m/%Y')}. "
+            f"Anotei o check-in para {start_fmt}. "
             f"Qual seria a data de check-out ou quantas diárias você gostaria de reservar?"
         )
         return ChatMessageOutput(
@@ -380,13 +373,20 @@ async def handle_commercial_message(
             response_text=ask_checkout_msg,
             session_id=session_id,
             suggested_actions=[
-                f"Reservar de {single_checkin.strftime('%d/%m/%Y')} a {sug_end_2.strftime('%d/%m/%Y')}",
-                f"Reservar de {single_checkin.strftime('%d/%m/%Y')} a {sug_end_3.strftime('%d/%m/%Y')}",
+                f"Reservar de {start_fmt} a {sug_end_2.strftime('%d/%m/%Y')}",
+                f"Reservar de {start_fmt} a {sug_end_3.strftime('%d/%m/%Y')}",
             ],
         )
 
-    # Fluxo de Solicitação e Validação de Reserva (quando há intenção de reserva ou datas enviadas após intenção)
-    if (has_reservation_intent or (history_has_reservation_intent and extracted is not None)) and db is not None:
+    # Fluxo de Solicitação e Validação de Reserva:
+    # Dispara quando há intenção explícita na mensagem atual OU quando o cliente envia datas
+    # após intenção de reserva (evitando re-disparar em perguntas de FAQ nos turnos seguintes)
+    continuing_reservation_with_dates = (
+        history_has_reservation_intent
+        and extracted is not None
+        and (current_extracted is not None or awaiting_dates_from_user)
+    )
+    if (has_reservation_intent or continuing_reservation_with_dates) and db is not None:
         if extracted is not None:
             cand_start, cand_end = extracted
         elif history_list:
@@ -397,8 +397,13 @@ async def handle_commercial_message(
             nightly_rate = getattr(prop, "nightly_rate", 350.0) or 350.0
             ask_dates_msg = (
                 f"Com certeza! A diária do '{prop.name}' é de {_format_brl(nightly_rate)}. "
-                f"Para quais datas de check-in e check-out você gostaria de verificar a disponibilidade?"
+                "Para quais datas de check-in e check-out você gostaria de "
+                "verificar a disponibilidade?"
             )
+            wk_s = wk_start.strftime("%d/%m/%Y")
+            wk_e = wk_end.strftime("%d/%m/%Y")
+            alt_s = alt_start.strftime("%d/%m/%Y")
+            alt_e = alt_end.strftime("%d/%m/%Y")
             return ChatMessageOutput(
                 run_id=run_id,
                 property_id=prop.id,
@@ -406,8 +411,8 @@ async def handle_commercial_message(
                 response_text=ask_dates_msg,
                 session_id=session_id,
                 suggested_actions=[
-                    f"Reservar de {wk_start.strftime('%d/%m/%Y')} a {wk_end.strftime('%d/%m/%Y')}",
-                    f"Reservar de {alt_start.strftime('%d/%m/%Y')} a {alt_end.strftime('%d/%m/%Y')}",
+                    f"Reservar de {wk_s} a {wk_e}",
+                    f"Reservar de {alt_s} a {alt_e}",
                     "Consultar calendário",
                 ],
             )
@@ -436,12 +441,14 @@ async def handle_commercial_message(
             free_start, free_end = _find_next_free_window(
                 db, prop.id, conflict.end_date, nights=nights_requested
             )
+            c_start = conflict.start_date.strftime("%d/%m/%Y")
+            c_end = conflict.end_date.strftime("%d/%m/%Y")
+            f_start = free_start.strftime("%d/%m/%Y")
+            f_end = free_end.strftime("%d/%m/%Y")
             conflict_msg = (
                 f"O imóvel '{prop.name}' já possui uma reserva confirmada de "
-                f"{conflict.start_date.strftime('%d/%m/%Y')} a {conflict.end_date.strftime('%d/%m/%Y')} "
-                f"no calendário. Temos disponibilidade livre de "
-                f"{free_start.strftime('%d/%m/%Y')} a {free_end.strftime('%d/%m/%Y')}. "
-                f"Quais outras datas funcionam para você?"
+                f"{c_start} a {c_end} no calendário. Temos disponibilidade livre de "
+                f"{f_start} a {f_end}. Quais outras datas funcionam para você?"
             )
             return ChatMessageOutput(
                 run_id=run_id,
@@ -450,7 +457,7 @@ async def handle_commercial_message(
                 response_text=conflict_msg,
                 session_id=session_id,
                 suggested_actions=[
-                    f"Reservar de {free_start.strftime('%d/%m/%Y')} a {free_end.strftime('%d/%m/%Y')}",
+                    f"Reservar de {f_start} a {f_end}",
                     "Escolher outras datas",
                     "Consultar calendário",
                 ],
@@ -458,8 +465,10 @@ async def handle_commercial_message(
 
         nights = max(1, (cand_end - cand_start).days)
         nightly_rate = getattr(prop, "nightly_rate", 350.0) or 350.0
-        proposed_price = _extract_proposed_price(combined_user_context)
-        total_price = proposed_price if proposed_price is not None else round(nights * nightly_rate, 2)
+        proposed_price = _extract_proposed_price(recent_two_turns)
+        total_price = (
+            proposed_price if proposed_price is not None else round(nights * nightly_rate, 2)
+        )
         num_guests = _extract_guests_count(combined_user_context)
 
         session_suffix = f" ({session_id[-4:]})" if session_id and len(session_id) >= 4 else ""
@@ -484,11 +493,13 @@ async def handle_commercial_message(
         db.commit()
         db.refresh(new_booking)
 
+        diarias_lbl = "diária" if nights == 1 else "diárias"
         proposal_msg = (
             f"As datas de {cand_start.strftime('%d/%m/%Y')} a {cand_end.strftime('%d/%m/%Y')} "
-            f"({nights} {'diária' if nights == 1 else 'diárias'}) estão disponíveis para o imóvel '{prop.name}'! "
+            f"({nights} {diarias_lbl}) estão disponíveis para o imóvel '{prop.name}'! "
             f"Registrei sua solicitação de reserva pelo valor total de {_format_brl(total_price)} "
-            f"e enviei para aprovação do anfitrião. Assim que ele aceitar, sua reserva será confirmada por aqui."
+            "e enviei para aprovação do anfitrião. Assim que ele aceitar, "
+            "sua reserva será confirmada por aqui."
         )
         return ChatMessageOutput(
             run_id=run_id,

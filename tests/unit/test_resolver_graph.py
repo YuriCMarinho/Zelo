@@ -47,9 +47,7 @@ from app.services.scheduling import find_optimal_schedule
 @pytest.fixture(autouse=True)
 def setup_sessions(monkeypatch: pytest.MonkeyPatch, db_session: Session) -> None:
     """Garante que todos os nós do grafo usem o engine do SQLite in-memory de teste."""
-    session_factory = sessionmaker(
-        autocommit=False, autoflush=False, bind=db_session.get_bind()
-    )
+    session_factory = sessionmaker(autocommit=False, autoflush=False, bind=db_session.get_bind())
     monkeypatch.setattr(resolver_graph, "SessionLocal", session_factory)
 
 
@@ -700,10 +698,16 @@ async def test_fast_provider_collection_starts_after_graph_is_waiting(
     async def collect_immediately(db: Session, category: ProviderCategory, region: str) -> None:
         snapshot = await compiled_resolver_graph.aget_state(resolver_graph._thread(ticket.id))
         assert "wait_for_providers" in snapshot.next
-        db.add(Provider(
-            id="prov-fast", name="Pintor confirmado", category=category.value,
-            region=region, phone="+55 21 98888-0000", is_validated=True,
-        ))
+        db.add(
+            Provider(
+                id="prov-fast",
+                name="Pintor confirmado",
+                category=category.value,
+                region=region,
+                phone="+55 21 98888-0000",
+                is_validated=True,
+            )
+        )
         db.commit()
 
     monkeypatch.setattr(resolver_graph, "collect_on_demand", collect_immediately)
@@ -1145,4 +1149,3 @@ def test_api_audit_events(
     resp_node = client.get("/api/audit?node=router")
     assert resp_node.status_code == 200
     assert len(resp_node.json()) >= 1
-

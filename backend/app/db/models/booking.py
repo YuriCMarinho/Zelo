@@ -14,9 +14,7 @@ if TYPE_CHECKING:
 class Booking(Base):
     __tablename__ = "bookings"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     property_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True
     )

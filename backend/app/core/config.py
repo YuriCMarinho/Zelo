@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     def sync_settings(self) -> "Settings":
         if self.llm_mode.lower() == "real":
             self.llm_mode = "featherless"
-        if self.langfuse_base_url and (self.langfuse_host == "https://cloud.langfuse.com" or not self.langfuse_host):
+        if self.langfuse_base_url and (
+            self.langfuse_host == "https://cloud.langfuse.com" or not self.langfuse_host
+        ):
             self.langfuse_host = self.langfuse_base_url
         return self
 
