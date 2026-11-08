@@ -718,19 +718,21 @@ async def init_resolver_checkpointer() -> None:
     if not settings.database_url.startswith("postgresql") or settings.environment == "testing":
         return
     conninfo = settings.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    pool = AsyncConnectionPool(
+        conninfo,
+        open=False,
+        kwargs={"row_factory": dict_row, "autocommit": True, "prepare_threshold": 0},
+    )
     try:
-        pool = AsyncConnectionPool(
-            conninfo,
-            open=False,
-            kwargs={"row_factory": dict_row, "autocommit": True, "prepare_threshold": 0},
-        )
-        await pool.open()
+        await pool.open(wait=True, timeout=10)
         saver = AsyncPostgresSaver(cast(Any, pool))
         await saver.setup()
     except Exception as exc:
+        await pool.close()  # sem isso o pool fica tentando reconectar em segundo plano
         logger.warning(
             "Falha ao iniciar AsyncPostgresSaver; o Nó 3 segue com MemorySaver "
-            "(pausas se perdem ao reiniciar)",
+            "(pausas se perdem ao reiniciar). No Windows, rode o uvicorn com "
+            "--loop asyncio:SelectorEventLoop.",
             extra={"error": str(exc)},
         )
         return
