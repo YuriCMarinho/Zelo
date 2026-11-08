@@ -25,7 +25,10 @@ def check() -> dict[str, object]:
         with urlopen(req, timeout=2) as response:
             return json.load(response)
 
-    with tempfile.TemporaryDirectory(prefix="zelo-recorded-demo-") as directory:
+    # No Windows o SQLite fica travado um instante após encerrar o servidor.
+    with tempfile.TemporaryDirectory(
+        prefix="zelo-recorded-demo-", ignore_cleanup_errors=True
+    ) as directory:
         env = {
             **os.environ, "LLM_MODE": "recorded_demo", "ENVIRONMENT": "development",
             "DATABASE_URL": f"sqlite:///{directory}/demo.db", "PROVIDER_SOURCE": "fixture",
