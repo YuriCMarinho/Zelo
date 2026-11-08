@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/smartrepair"
+    database_url: str = "postgresql://postgres:postgres@localhost:5433/smartrepair"
     environment: str = "development"
     log_level: str = "INFO"
     llm_mode: str = "mock"
