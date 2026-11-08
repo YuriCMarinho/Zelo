@@ -125,7 +125,9 @@ def test_full_maintenance_happy_path_e2e(
     # --- PASSO 1: Relato do Hóspede via Ponto Único de Chat ---
     chat_payload = {
         "property_id": integration_property.id,
-        "message": "Socorro! O cano da pia do banheiro estourou e está vazando muita água pelo chão!",
+        "message": (
+            "Socorro! O cano da pia do banheiro estourou e está vazando muita água pelo chão!"
+        ),
         "sender_role": ReportedByRole.TENANT.value,
         "run_id": "run-e2e-happy-001",
     }

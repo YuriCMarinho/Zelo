@@ -19,7 +19,6 @@ from app.db.models import AuditEvent, Provider
 from app.schemas.common import ProviderCategory, mask_phone
 from app.security.masking import mask_dict_pii, mask_pii
 
-
 # ==============================================================================
 # 1. TESTES UNITÁRIOS DE MASCARAMENTO DE PII (TELEFONES, CPFS, E-MAILS, CHAVES)
 # ==============================================================================
@@ -208,6 +207,7 @@ def test_logger_masks_pii_in_log_records(caplog: pytest.LogCaptureFixture) -> No
     (telefones, CPFs, tokens) e grava as versões anonimizadas.
     """
     import logging
+
     from app.observability.logger import PIIMaskingFilter
 
     test_logger = logging.getLogger("test.lgpd.logger")
