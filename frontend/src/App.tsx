@@ -1,37 +1,132 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  approveQuote,
-  fetchProperties,
-  fetchQuotes,
-  fetchTicketsForProperty,
-} from './api/client'
+import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
+import { initialMessages, properties } from './demo-data'
+import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
-import { ChatPanel } from './components/ChatPanel'
-import { Header, ZeloLogo } from './components/Header'
-import { ProviderSimulator } from './components/ProviderSimulator'
-import { QuotesComparison } from './components/QuotesComparison'
-import { StateTimeline } from './components/StateTimeline'
-import type {
-  ChatMessage,
-  MaintenanceTicket,
-  Occupancy,
-  Property,
-  PropertyTab,
-  Quote,
-} from './contracts'
-import { initialMessages, properties as defaultProperties } from './demo-data'
+import { fetchProperties, resetDemoData } from './api/client'
+import { ManagementPage } from './management'
+import { withLocalReservations } from './reservations'
 import { parseRoute, propertyUrl, type Route } from './routes'
 
-const money = (value: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)
-
+const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)
 const currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-
 const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'visao-geral', label: 'Visão geral' },
   { id: 'chat', label: 'Chat do imóvel' },
   { id: 'adm', label: 'Agente ⇄ Anfitrião' },
+  { id: 'orcamentos', label: 'Orçamentos' },
 ]
+
+function ZeloMark({ size = 40, transparent = false }: { size?: number; transparent?: boolean }) {
+  return <img className="zelo-logo" src={transparent ? '/zelo-logo-transparent.svg' : '/zelo-logo.svg'} width={size} height={size} alt="Zelo" />
+}
+
+function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
+
+  const handleReset = async () => {
+    setIsResetting(true)
+    try {
+      await resetDemoData()
+      window.location.href = '/'
+    } catch {
+      setShowConfirm(false)
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
+  return (
+    <header className="site-header">
+      <div className="header-inner">
+        <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }} aria-label="Zelo, ir para imóveis">
+          <ZeloMark /><span>zelo<small>QUEBROU? A GENTE RESOLVE.</small></span>
+        </a>
+        <nav className="header-nav" aria-label="Navegação principal">
+          {[
+            { url: '/', label: 'Meus imóveis', view: 'listing' },
+            { url: '/reservas', label: 'Reservas', view: 'reservas' },
+            { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
+            { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
+            { url: '/auditoria', label: 'Auditoria', view: 'auditoria' },
+          ].map((item) => (
+            <a
+              key={item.url}
+              href={item.url}
+              aria-current={route.view === item.view || (route.view === 'property' && item.view === 'listing') ? 'page' : undefined}
+              onClick={(event) => { event.preventDefault(); navigate(item.url) }}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div className="header-right">
+          <button
+            type="button"
+            className="demo-reset-btn"
+            onClick={() => setShowConfirm(true)}
+            title="Reinicializar ambiente de demonstração"
+          >
+            ↻ Resetar Demo
+          </button>
+          <div className="avatar" aria-label="Perfil do anfitrião">A</div>
+        </div>
+      </div>
+      {showConfirm && (
+        <div className="demo-reset-modal-overlay" role="dialog" aria-modal="true">
+          <div className="demo-reset-modal">
+            <h3>Resetar Dados da Demonstração?</h3>
+            <p>
+              Isso restaurará os 3 imóveis originais, limpará chamados transacionais e reiniciará o
+              ledger para que os avaliadores possam testar do zero.
+            </p>
+            <div className="demo-reset-actions">
+              <button
+                type="button"
+                className="action-secondary"
+                onClick={() => setShowConfirm(false)}
+                disabled={isResetting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="action-primary"
+                onClick={handleReset}
+                disabled={isResetting}
+              >
+                {isResetting ? 'Reinicializando...' : 'Confirmar Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
+  )
+}
+
+function PropertyCard({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
+  return <a className="property-card" href={propertyUrl(property.id)} onClick={(event) => { event.preventDefault(); navigate(propertyUrl(property.id)) }}>
+    <div className="card-image-wrap"><img src={property.image} alt={property.title} className="card-image" /><span className="card-tag">{property.tag}</span></div>
+    <div className="card-body"><div className="card-title-row"><h3>{property.title}</h3><span className="rating">★ <strong>{property.rating.toFixed(2)}</strong></span></div>
+      <p className="card-location">{property.location}</p><p className="card-meta">{property.guests} hóspedes · {property.bedrooms} quartos · {property.baths} banheiros</p>
+      <div className="card-footer"><span><strong>{money(property.nightlyRate)}</strong> <span>/ noite</span></span><span className="card-arrow" aria-hidden="true">↗</span></div>
+    </div>
+  </a>
+}
+
+function Listing({ navigate, propertiesList }: { navigate: (url: string) => void; propertiesList: Property[] }) {
+  const [query, setQuery] = useState('')
+  const filtered = propertiesList.filter((property) => `${property.title} ${property.location}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')))
+  return <main>
+    <section className="hero"><div className="hero-inner"><div><span className="eyebrow light">CUIDADO EM CADA DETALHE</span><h1>Seu imóvel bem cuidado.<br />Você no controle.</h1><p>Conversas, manutenção e decisões reunidas em um só lugar. A gente resolve; você aprova.</p><a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a></div><div className="hero-emblem" aria-hidden="true"><ZeloMark size={180} transparent /></div></div></section>
+    <section id="imoveis" className="listing-section page-width"><div className="section-heading"><div><span className="eyebrow">SEUS ESPAÇOS</span><h2>Meus imóveis</h2><p>Acompanhe cada estadia com tranquilidade.</p></div><label className="search-box"><span aria-hidden="true">⌕</span><span className="sr-only">Buscar imóvel</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar imóvel ou local" /></label></div>
+      {filtered.length ? <div className="property-grid">{filtered.map((property) => <PropertyCard key={property.id} property={property} navigate={navigate} />)}</div> : <div className="empty-state">Nenhum imóvel encontrado para “{query}”.</div>}
+      <div className="care-banner"><div className="care-symbol"><ZeloMark size={32} /></div><div><strong>Cuidar bem é estar por perto.</strong><p>Conversas, agenda e manutenção conectadas a cada imóvel.</p></div></div>
+    </section>
+  </main>
+}
 
 function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
   const [offset, setOffset] = useState(0)
@@ -40,605 +135,46 @@ function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
   const month = monthDate.getMonth()
   const totalDays = new Date(year, month + 1, 0).getDate()
   const mondayOffset = (monthDate.getDay() + 6) % 7
-  const days = Array.from({ length: mondayOffset + totalDays }, (_, index) =>
-    index < mondayOffset ? null : index - mondayOffset + 1
-  )
+  const days = Array.from({ length: mondayOffset + totalDays }, (_, index) => index < mondayOffset ? null : index - mondayOffset + 1)
   const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(monthDate)
-
   const statusForDay = (day: number) => {
     const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     return occupancy.find((item) => date >= item.startDate && date <= item.endDate)
   }
-
-  return (
-    <section className="timeline-card" aria-label="Calendário de ocupação">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span className="eyebrow">AGENDA DO IMÓVEL</span>
-          <h3 style={{ margin: '4px 0 0' }}>Calendário de ocupação</h3>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            type="button"
-            className="back-btn"
-            style={{ width: '32px', height: '32px' }}
-            aria-label="Mês anterior"
-            onClick={() => setOffset(offset - 1)}
-          >
-            ‹
-          </button>
-          <strong style={{ textTransform: 'capitalize', fontSize: '13px', minWidth: '110px', textAlign: 'center' }}>
-            {monthLabel}
-          </strong>
-          <button
-            type="button"
-            className="back-btn"
-            style={{ width: '32px', height: '32px' }}
-            aria-label="Próximo mês"
-            onClick={() => setOffset(offset + 1)}
-          >
-            ›
-          </button>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
-          gap: '4px',
-          textAlign: 'center',
-          marginTop: '12px',
-        }}
-        role="grid"
-        aria-label={monthLabel}
-      >
-        {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((name) => (
-          <span key={name} style={{ fontSize: '11px', color: 'var(--mar-72)', fontWeight: 600, paddingBottom: '6px' }} role="columnheader">
-            {name}
-          </span>
-        ))}
-        {days.map((day, index) => {
-          const status = day ? statusForDay(day) : undefined
-          const isToday = day === new Date().getDate() && offset === 0
-          const bg =
-            status?.status === 'reserved'
-              ? 'var(--mar-profundo)'
-              : status?.status === 'maintenance'
-              ? 'var(--ambar)'
-              : 'transparent'
-          const color =
-            status?.status === 'reserved'
-              ? 'var(--areia)'
-              : status?.status === 'maintenance'
-              ? 'var(--mar-profundo)'
-              : 'var(--mar-profundo)'
-
-          return (
-            <span
-              role="gridcell"
-              key={index}
-              style={{
-                height: '32px',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: '12px',
-                borderRadius: '8px',
-                background: bg,
-                color: color,
-                fontWeight: status ? 700 : 500,
-                outline: isToday && !status ? '1.5px solid var(--mar-profundo)' : undefined,
-              }}
-              aria-label={day ? `${day} de ${monthLabel}${status ? `, ${status.label}` : ', disponível'}` : undefined}
-            >
-              {day}
-            </span>
-          )
-        })}
-      </div>
-
-      <div style={{ display: 'flex', gap: '16px', marginTop: '14px', fontSize: '11px', color: 'var(--mar-72)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <i style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--mar-profundo)' }} /> Reservado
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <i style={{ width: '10px', height: '10px', borderRadius: '3px', background: 'var(--ambar)' }} /> Manutenção
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <i style={{ width: '10px', height: '10px', borderRadius: '3px', border: '1px solid var(--mar-16)' }} /> Disponível
-        </span>
-      </div>
-    </section>
-  )
+  return <section className="calendar-card" aria-label="Calendário de ocupação"><div className="calendar-header"><div><span className="eyebrow">AGENDA DO IMÓVEL</span><h3>Calendário de ocupação</h3></div><div className="calendar-controls"><button aria-label="Mês anterior" onClick={() => setOffset(offset - 1)}>‹</button><strong>{monthLabel}</strong><button aria-label="Próximo mês" onClick={() => setOffset(offset + 1)}>›</button></div></div>
+    <div className="calendar-grid" role="grid" aria-label={monthLabel}>{['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((name) => <span key={name} className="calendar-weekday" role="columnheader">{name}</span>)}{days.map((day, index) => { const status = day ? statusForDay(day) : undefined; return <span role="gridcell" key={index} className={`calendar-day ${status ? `day-${status.status}` : ''} ${day === new Date().getDate() && offset === 0 ? 'day-today' : ''}`} aria-label={day ? `${day} de ${monthLabel}${status ? `, ${status.label}` : ', disponível'}` : undefined} title={status?.label}>{day}</span> })}</div>
+    <div className="calendar-legend"><span><i className="legend-available" /> Disponível</span><span><i className="legend-reserved" /> Reservado</span><span><i className="legend-maintenance" /> Manutenção</span></div>
+  </section>
 }
 
 function Overview({ property }: { property: Property }) {
-  return (
-    <div className="split-layout">
-      <div>
-        <div style={{ height: '360px', borderRadius: '20px', overflow: 'hidden', border: '1px solid var(--mar-16)' }}>
-          <img
-            src={property.image}
-            alt={property.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        </div>
-
-        <section style={{ marginTop: '28px' }}>
-          <span className="eyebrow">SOBRE O ESPAÇO</span>
-          <h2 style={{ margin: '8px 0 12px', fontSize: '24px' }}>Um lugar para se sentir em casa.</h2>
-          <p style={{ color: 'var(--mar-72)', lineHeight: 1.7, fontSize: '15px' }}>{property.description}</p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px',
-              marginTop: '20px',
-            }}
-          >
-            {property.amenities.map((amenity) => (
-              <span key={amenity} style={{ fontSize: '13px', fontWeight: 500, color: 'var(--mar-profundo)' }}>
-                ✓ {amenity}
-              </span>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div className="timeline-card">
-          <span className="eyebrow">DIÁRIA & RESERVA</span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '8px 0' }}>
-            <strong style={{ fontSize: '28px', fontWeight: 800 }}>{money(property.nightlyRate)}</strong>
-            <span style={{ fontSize: '14px', color: 'var(--mar-72)' }}>/ noite</span>
-          </div>
-          <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)' }}>
-            Conforto e acolhimento em cada detalhe. Gestão com Zelo do início ao fim.
-          </p>
-        </div>
-        <Calendar occupancy={property.occupancy} />
-      </aside>
-    </div>
-  )
+  return <div className="overview-grid"><div><div className="gallery"><img className="gallery-main" src={property.image} alt={`Vista principal de ${property.title}`} /><div>{property.gallery.map((image, index) => <img key={image} src={image} alt={`Ambiente ${index + 1} de ${property.title}`} />)}</div></div><section className="about-section"><span className="eyebrow">SOBRE O ESPAÇO</span><h2>Um lugar para se sentir em casa.</h2><p>{property.description}</p><div className="amenities">{property.amenities.map((amenity) => <span key={amenity}>✓ {amenity}</span>)}</div></section></div><aside className="overview-aside"><div className="stay-card"><span className="eyebrow">SUA PRÓXIMA ESTADIA</span><div><strong>{money(property.nightlyRate)}</strong><span> / noite</span></div><p>Conforto em cada detalhe, cuidado em cada conversa.</p><div className="stay-divider" /><span>◷ &nbsp; Check-in flexível</span><span>✦ &nbsp; Suporte durante a estadia</span></div><Calendar occupancy={property.occupancy} /></aside></div>
 }
 
-function PropertyCard({
-  property,
-  navigate,
-}: {
-  property: Property
-  navigate: (url: string) => void
-}) {
-  return (
-    <a
-      className="property-card"
-      href={propertyUrl(property.id)}
-      onClick={(e) => {
-        e.preventDefault()
-        navigate(propertyUrl(property.id))
-      }}
-    >
-      <div className="card-img-wrap">
-        <img src={property.image} alt={property.title} className="card-img" />
-        <span className="card-tag">{property.tag}</span>
-      </div>
-      <div className="card-content">
-        <div className="card-title-row">
-          <h3>{property.title}</h3>
-          <span className="card-rating">★ {property.rating.toFixed(2)}</span>
-        </div>
-        <p className="card-loc">{property.location}</p>
-        <p className="card-meta">
-          {property.guests} hóspedes · {property.bedrooms} quartos · {property.baths} banheiros
-        </p>
-        <div className="card-footer">
-          <span>
-            <strong>{money(property.nightlyRate)}</strong> / noite
-          </span>
-          <span className="card-btn">Ver imóvel ›</span>
-        </div>
-      </div>
-    </a>
-  )
+const sampleQuotes = [
+  { id: 'carlos', name: 'Carlos Eletricista', rating: '4,9 · 128 avaliações', price: 180, when: 'Amanhã, 9h', note: 'Recomendado' },
+  { id: 'volt', name: 'Volt Reparos', rating: '4,7 · 64 avaliações', price: 240, when: 'Hoje, 17h', note: '' },
+  { id: 'joao', name: 'João Faz-Tudo', rating: '4,5 · 21 avaliações', price: 150, when: 'Sexta, 14h', note: '' },
+] as const
+
+function QuotesPanel({ property }: { property: Property }) {
+  const [selected, setSelected] = useState<string>('carlos')
+  const [confirmed, setConfirmed] = useState(false)
+  const choice = sampleQuotes.find((quote) => quote.id === selected) ?? sampleQuotes[0]
+  return <section className="quotes-layout" aria-labelledby="quotes-heading"><div className="quotes-main"><div className="quotes-intro"><span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span><span className="eyebrow">EXEMPLO DE COMPARATIVO · {property.title.toLocaleUpperCase('pt-BR')}</span><h2 id="quotes-heading">Chuveiro sem água quente</h2><p>Neste exemplo, 3 de 5 eletricistas responderam. O hóspede foi avisado de que o problema está sendo cuidado.</p></div><div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">{sampleQuotes.map((quote) => <button type="button" role="radio" aria-checked={selected === quote.id} key={quote.id} className={`quote-card ${selected === quote.id ? 'selected' : ''}`} onClick={() => { setSelected(quote.id); setConfirmed(false) }}><span className="quote-card-top"><span><strong>{quote.name}</strong><small>{quote.rating}{quote.note ? ` · ${quote.note}` : ''}</small></span><b>{money(quote.price)}</b></span><span className="quote-time">{quote.when}</span></button>)}</div><div className="quote-action"><button type="button" onClick={() => setConfirmed(true)}>{confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}</button><p>Simulação local: nenhuma contratação ou agendamento é realizado.</p></div></div><aside className="quotes-aside"><span className="eyebrow">VOCÊ DECIDE</span><h3>Compare com calma.</h3><p>Preço, avaliação e horário ficam lado a lado para ajudar sua escolha. A contratação só pode acontecer após sua aprovação.</p><div className="quote-steps"><span>01 <strong>Orçamentos recebidos</strong></span><span>02 <strong>Sua escolha</strong></span><span>03 <strong>Agendamento confirmado</strong></span></div></aside></section>
 }
 
-function Listing({
-  propertiesList,
-  navigate,
-}: {
-  propertiesList: Property[]
-  navigate: (url: string) => void
-}) {
-  const [query, setQuery] = useState('')
-  const filtered = propertiesList.filter((prop) =>
-    `${prop.title} ${prop.location} ${prop.neighborhood}`
-      .toLowerCase()
-      .includes(query.toLowerCase())
-  )
-
-  return (
-    <main>
-      <section className="hero">
-        <div className="page-width hero-inner">
-          <div>
-            <span className="eyebrow">QUEBROU ALGO NO IMÓVEL? A GENTE RESOLVE. VOCÊ SÓ APROVA.</span>
-            <h1>
-              Gestão inteligente de estadias <br />e manutenção autônoma.
-            </h1>
-            <p>
-              O hóspede relata, a Zelo busca orçamentos com profissionais homologados e apresenta a melhor opção.
-              Nada é contratado sem sua aprovação explícita.
-            </p>
-            <a
-              href="#imoveis"
-              className="hero-cta"
-              onClick={(e) => {
-                e.preventDefault()
-                document.getElementById('imoveis')?.scrollIntoView({ behavior: 'smooth' })
-              }}
-            >
-              Explorar imóveis atendidos ›
-            </a>
-          </div>
-          <div aria-hidden="true" style={{ opacity: 0.9 }}>
-            <ZeloLogo size={180} />
-          </div>
-        </div>
-      </section>
-
-      <section id="imoveis" className="listing-section page-width">
-        <div className="section-header">
-          <div>
-            <span className="eyebrow muted">PORTFÓLIO DE ESTADIAS</span>
-            <h2>Selecione um imóvel para interagir</h2>
-          </div>
-          <div className="search-input-wrap">
-            <span className="search-icon" aria-hidden="true">
-              🔍
-            </span>
-            <input
-              className="search-input"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por imóvel ou bairro..."
-              aria-label="Buscar imóvel"
-            />
-          </div>
-        </div>
-
-        {filtered.length ? (
-          <div className="property-grid">
-            {filtered.map((property) => (
-              <PropertyCard key={property.id} property={property} navigate={navigate} />
-            ))}
-          </div>
-        ) : (
-          <div style={{ padding: '48px', textAlign: 'center', background: 'var(--branco)', borderRadius: '16px' }}>
-            Nenhum imóvel encontrado para “{query}”.
-          </div>
-        )}
-      </section>
-    </main>
-  )
-}
-
-function PropertyPage({
-  property,
-  tab,
-  navigate,
-  messages,
-  onNewMessage,
-}: {
-  property: Property
-  tab: PropertyTab
-  navigate: (url: string) => void
-  messages: ChatMessage[]
-  onNewMessage: (msg: ChatMessage) => void
-}) {
-  const [ticket, setTicket] = useState<MaintenanceTicket | null>(null)
-  const [quotes, setQuotes] = useState<Quote[]>([])
-  const [loadingQuotes, setLoadingQuotes] = useState(false)
-  const [scheduledDate, setScheduledDate] = useState<string | null>(null)
-
-  // Carrega chamados reais do imóvel
-  const loadTicketData = () => {
-    fetchTicketsForProperty(property.id)
-      .then(async (tickets) => {
-        const active = tickets[0]
-        if (active) {
-          setTicket(active)
-          if (active.scheduled_date) setScheduledDate(active.scheduled_date)
-          const qList = await fetchQuotes(active.id)
-          setQuotes(qList)
-        }
-      })
-      .catch(() => {})
-  }
-
-  useEffect(() => {
-    let ignore = false
-    fetchTicketsForProperty(property.id)
-      .then(async (tickets) => {
-        if (ignore) return
-        const active = tickets[0]
-        if (active) {
-          setTicket(active)
-          if (active.scheduled_date) {
-            setScheduledDate(active.scheduled_date)
-          }
-          setLoadingQuotes(true)
-          const qList = await fetchQuotes(active.id)
-          if (!ignore) {
-            setQuotes(qList)
-            setLoadingQuotes(false)
-          }
-        } else {
-          setTicket({
-            id: 'tick-demo-302',
-            run_id: 'run-demo-001',
-            property_id: property.id,
-            reported_by_role: 'tenant',
-            category: 'eletricista',
-            urgency: 'normal',
-            location_in_property: 'Banheiro',
-            description: 'Chuveiro sem água quente',
-            status: 'awaiting_adm_approval',
-            adm_synthesis:
-              'Pedimos orçamento a 5 eletricistas da região. 3 responderam. O hóspede já foi avisado de que estamos cuidando.',
-            notify_tenant: true,
-            created_at: new Date().toISOString(),
-          })
-          setQuotes([
-            {
-              id: 'q-carlos',
-              ticket_id: 'tick-demo-302',
-              run_id: 'run-demo-001',
-              provider_id: 'prov-carlos',
-              provider_name: 'Carlos Eletricista',
-              provider_rating: 4.9,
-              amount: 180,
-              proposed_availability: 'Amanhã, 9h',
-              description: 'Hóspede sai às 11h',
-              status: 'received',
-              is_recommended: true,
-            },
-            {
-              id: 'q-volt',
-              ticket_id: 'tick-demo-302',
-              run_id: 'run-demo-001',
-              provider_id: 'prov-volt',
-              provider_name: 'Volt Reparos',
-              provider_rating: 4.7,
-              amount: 240,
-              proposed_availability: 'Hoje, 17h',
-              status: 'received',
-            },
-            {
-              id: 'q-joao',
-              ticket_id: 'tick-demo-302',
-              run_id: 'run-demo-001',
-              provider_id: 'prov-joao',
-              provider_name: 'João Faz-Tudo',
-              provider_rating: 4.5,
-              amount: 150,
-              proposed_availability: 'Sexta, 14h',
-              status: 'received',
-            },
-          ])
-        }
-      })
-      .catch(() => {})
-
-    return () => {
-      ignore = true
-    }
-  }, [property.id])
-
-  async function handleApprove(providerId: string) {
-    if (!ticket) return
-    const updated = await approveQuote(ticket.id, providerId)
-    setTicket(updated)
-    // Após a aprovação o Nó 3 ainda espera a devolutiva do prestador; o hóspede só é
-    // avisado quando o dia estiver confirmado.
-    if (updated.status !== 'resolved' && updated.status !== 'confirmed_schedule') return
-    const dateStr = updated.scheduled_date || 'amanhã, 9h'
-    setScheduledDate(dateStr)
-
-    // Adiciona o aviso ao hóspede no chat do imóvel
-    onNewMessage({
-      id: crypto.randomUUID(),
-      propertyId: property.id,
-      channel: 'guest',
-      sender: 'agent',
-      body: `Perfeito! O anfitrião aprovou o orçamento e agendamos a visita para ${dateStr}. Estaremos acompanhando!`,
-      time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
-      scheduledDate: dateStr,
-    })
-  }
-
-  return (
-    <main className="page-width detail-page">
-      <div className="breadcrumb">
-        <a
-          href="/"
-          onClick={(e) => {
-            e.preventDefault()
-            navigate('/')
-          }}
-        >
-          Imóveis
-        </a>
-        <span>›</span>
-        <span>{property.title}</span>
-      </div>
-
-      <div className="detail-header">
-        <div>
-          <span className="eyebrow">{property.neighborhood.toUpperCase()} · CEARÁ</span>
-          <h1>{property.title}</h1>
-          <p>
-            ★ {property.rating.toFixed(2)} · {property.reviews} avaliações · {property.location}
-          </p>
-        </div>
-      </div>
-
-      <nav className="tabs-nav" aria-label="Abas de atendimento do imóvel">
-        {tabs.map((item) => (
-          <a
-            key={item.id}
-            href={propertyUrl(property.id, item.id)}
-            className={`tab-link ${tab === item.id ? 'active' : ''}`}
-            aria-current={tab === item.id ? 'page' : undefined}
-            onClick={(e) => {
-              e.preventDefault()
-              navigate(propertyUrl(property.id, item.id))
-            }}
-          >
-            {item.label}
-            {item.id === 'adm' && ticket?.status === 'awaiting_adm_approval' && (
-              <span className="tab-badge" aria-hidden="true">
-                Decisão pendente
-              </span>
-            )}
-          </a>
-        ))}
-      </nav>
-
-      <div className="tab-content">
-        {tab === 'visao-geral' && <Overview property={property} />}
-
-        {tab === 'chat' && (
-          <div className="split-layout">
-            <ChatPanel
-              property={property}
-              messages={messages}
-              onNewMessage={onNewMessage}
-              onTicketCreated={() => loadTicketData()}
-              scheduledVisit={scheduledDate}
-            />
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <ProviderSimulator
-                property={property}
-                currentTicketId={ticket?.id}
-                ticketStatus={ticket?.status}
-                onTicketUpdated={loadTicketData}
-              />
-              <StateTimeline
-                status={ticket?.status || 'open'}
-                scheduledDate={scheduledDate}
-                notifyTenant={ticket?.notify_tenant}
-              />
-            </aside>
-          </div>
-        )}
-
-        {tab === 'adm' && (
-          <div className="split-layout">
-            <QuotesComparison
-              property={property}
-              ticket={ticket}
-              quotes={quotes}
-              onApprove={handleApprove}
-              isLoading={loadingQuotes}
-            />
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div className="timeline-card">
-                <span className="eyebrow">ÁREA DO ANFITRIÃO</span>
-                <h3 style={{ margin: '4px 0' }}>Decisões com você</h3>
-                <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)' }}>
-                  Somente as decisões deste imóvel aparecem aqui. O agente reúne orçamentos e aguarda sua escolha explícita.
-                </p>
-              </div>
-              <StateTimeline
-                status={ticket?.status || 'awaiting_adm_approval'}
-                scheduledDate={scheduledDate}
-                notifyTenant={ticket?.notify_tenant}
-              />
-              <ProviderSimulator
-                property={property}
-                currentTicketId={ticket?.id}
-                ticketStatus={ticket?.status}
-                onTicketUpdated={loadTicketData}
-              />
-            </aside>
-          </div>
-        )}
-      </div>
-    </main>
-  )
+function PropertyPage({ property, tab, navigate, messages, sendMessage }: { property: Property; tab: PropertyTab; navigate: (url: string) => void; messages: ChatMessage[]; sendMessage: (message: ChatMessage) => void }) {
+  return <main className="page-width detail-page"><div className="breadcrumb"><a href="/" onClick={(event) => { event.preventDefault(); navigate('/') }}>Imóveis</a><span>›</span><span>{property.title}</span></div><div className="detail-intro"><div><span className="eyebrow">{property.neighborhood.toLocaleUpperCase('pt-BR')} · CEARÁ</span><h1>{property.title}</h1><p><span className="rating">★ {property.rating.toFixed(2)}</span> <span className="dot-sep">·</span> {property.reviews} avaliações <span className="dot-sep">·</span> {property.location}</p></div><div className="detail-capacity">{property.guests} hóspedes <span>·</span> {property.bedrooms} quartos <span>·</span> {property.beds} camas <span>·</span> {property.baths} banheiros</div></div><nav className="tabs" aria-label="Seções do imóvel">{tabs.map((item) => <a key={item.id} href={propertyUrl(property.id, item.id)} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'active' : ''} onClick={(event) => { event.preventDefault(); navigate(propertyUrl(property.id, item.id)) }}>{item.label}</a>)}</nav><div className="tab-content" key={property.id}>{tab === 'visao-geral' ? <Overview property={property} /> : tab === 'orcamentos' ? <QuotesPanel property={property} /> : <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />}</div></main>
 }
 
 export default function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname, window.location.search))
-  const [propertiesList, setPropertiesList] = useState<Property[]>(() => [...defaultProperties])
+  const [propertiesList, setPropertiesList] = useState<Property[]>(() => [...properties])
+  useEffect(() => { fetchProperties().then(setPropertiesList).catch(() => {}) }, [])
   const [messages, setMessages] = useState<ChatMessage[]>(() => [...initialMessages])
-
-  useEffect(() => {
-    fetchProperties().then(setPropertiesList).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const onPopState = () => setRoute(parseRoute(window.location.pathname, window.location.search))
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [])
-
-  const currentProperty = useMemo(
-    () => (route.view === 'property' ? propertiesList.find((p) => p.id === route.propertyId) : undefined),
-    [route, propertiesList]
-  )
-
-  function navigate(url: string) {
-    window.history.pushState(null, '', url)
-    setRoute(parseRoute(window.location.pathname, window.location.search))
-    window.scrollTo?.(0, 0)
-  }
-
-  return (
-    <div className="app-shell">
-      <Header navigate={navigate} activeView={route.view === 'auditoria' ? 'auditoria' : 'imoveis'} />
-
-      {route.view === 'auditoria' ? (
-        <main className="page-width detail-page">
-          <div className="breadcrumb">
-            <a
-              href="/"
-              onClick={(e) => {
-                e.preventDefault()
-                navigate('/')
-              }}
-            >
-              Imóveis
-            </a>
-            <span>›</span>
-            <span>Painel do anfitrião & Custos</span>
-          </div>
-          <AuditPanel />
-        </main>
-      ) : route.view === 'property' && currentProperty ? (
-        <PropertyPage
-          property={currentProperty}
-          tab={route.tab}
-          navigate={navigate}
-          messages={messages}
-          onNewMessage={(msg) => setMessages((prev) => [...prev, msg])}
-        />
-      ) : (
-        <Listing propertiesList={propertiesList} navigate={navigate} />
-      )}
-
-      <footer className="site-footer">
-        <div className="page-width footer-inner">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <ZeloLogo size={28} />
-            <span style={{ fontWeight: 800, fontSize: '18px', color: 'var(--mar-profundo)' }}>zelo</span>
-            <span style={{ fontSize: '13px', color: 'var(--mar-72)' }}>
-              · Quebrou algo no imóvel? A gente resolve. Você só aprova.
-            </span>
-          </div>
-          <div>© {new Date().getFullYear()} Zelo · Estadias e Imóveis Bem Cuidados</div>
-        </div>
-      </footer>
-    </div>
-  )
+  useEffect(() => { const onPopState = () => setRoute(parseRoute(window.location.pathname, window.location.search)); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState) }, [])
+  const property = useMemo(() => route.view === 'property' ? propertiesList.find((item) => item.id === route.propertyId) : undefined, [route, propertiesList])
+  function navigate(url: string) { window.history.pushState(null, '', url); setRoute(parseRoute(window.location.pathname, window.location.search)); window.scrollTo?.(0, 0) }
+  return <div className="app-shell"><Header navigate={navigate} route={route} />{route.view === 'auditoria' ? <main className="page-width detail-page"><AuditPanel /></main> : route.view === 'property' && property ? <PropertyPage property={withLocalReservations(property)} tab={route.tab} navigate={navigate} messages={messages} sendMessage={(message) => setMessages((previous) => [...previous, message])} /> : route.view === 'reservas' || route.view === 'manutencao' || route.view === 'configuracoes' ? <ManagementPage key={route.view} view={route.view} navigate={navigate} /> : <Listing navigate={navigate} propertiesList={propertiesList} />}<footer className="site-footer"><div className="page-width"><ZeloMark size={32} /><span>Quebrou algo no imóvel? A gente resolve. Você só aprova.</span><span>© {new Date().getFullYear()} Zelo</span></div></footer></div>
 }

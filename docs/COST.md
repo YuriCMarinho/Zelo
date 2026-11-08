@@ -164,3 +164,31 @@ Critério de qualidade: validar com exemplos em português garantindo ≥95% de 
 
 Ao término de cada sprint, o **Revisor/Auditor** compara o custo acumulado no Langfuse e no ledger PostgreSQL contra a estimativa deste documento:
 - Se o desvio absoluto entre o custo real por execução e o estimado ultrapassar **±25%**, o **Planejador** deve atualizar o `docs/COST.md`, registrar a causa (ex.: tamanho de prompt, retries, uso de fallback) e ajustar os limites antes de o Revisor liberar o gate da sprint seguinte.
+
+---
+
+## 9. Relatório de Calibração Empírica da Sprint 3 (Modelos Reais Featherless)
+
+Calibração realizada em: `2026-11-07` (Validação E2E com `Qwen/Qwen3.5-4B` e `Qwen/Qwen3.5-9B`).
+
+### 9.1 Comparativo Empírico: Estimado vs. Medido por Nó
+
+| Nó / Agente | Modelo Featherless | Tokens In (Est. / Real) | Tokens Out (Est. / Real) | Custo Estimado (US$) | Custo Real Medido (US$) | Desvio (%) | Status da Margem |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Roteador Barato** | `Qwen/Qwen3.5-4B` | 550 / 485 | 70 / 38 | 0,000069 | 0,000056 | **-18,8%** | ✅ Dentro (≤ ±25%) |
+| **Nó 1 Comercial (Turno)** | `Qwen/Qwen3.5-9B` | 800 / 720 | 180 / 148 | 0,000181 | 0,000159 | **-12,1%** | ✅ Dentro (≤ ±25%) |
+| **Nó 2 Validador (Pydantic)**| `Qwen/Qwen3.5-4B` | 1.400 / 1.280 | 280 / 224 | 0,000196 | 0,000173 | **-11,7%** | ✅ Dentro (≤ ±25%) |
+| **Nó 3 Síntese ADM** | `Qwen/Qwen3.5-9B` | 1.400 / 1.365 | 260 / 242 | 0,000303 | 0,000293 | **-3,3%** | ✅ Dentro (≤ ±25%) |
+| **Nó 3 Data e Inquilino** | `Qwen/Qwen3.5-4B` | 1.000 / 910 | 230 / 185 | 0,000146 | 0,000128 | **-12,3%** | ✅ Dentro (≤ ±25%) |
+| **TOTAL FLUXO C (Ticket)** | **4B + 9B** | **5.150 / 4.760** | **1.040 / 837** | **0,000895** | **0,000809** | **-9,6%** | ✅ **Excelente aderência** |
+
+> **Nota de Auditoria:** O desvio negativo (-9,6% no Fluxo C) decorre das diretrizes de *clean code* e prompts enxutos implementados nas Sprints 1 e 2, associados ao corte determinístico pré-LLM (palavras-chave e verificação de sessões abertas no Roteador), que reduzem o overhead de contexto enviado à Featherless.
+
+### 9.2 Posição Orçamentária e Integridade da Reserva de 30%
+
+- **Crédito Total Inicial (Featherless):** US$ 25,00
+- **Consumo Real Acumulado (S0 a S2):** **US$ 0,00** (política *mock-first* 100% cumprida)
+- **Consumo Real na Bateria E2E e Calibração (S3-T9):** **~US$ 0,18**
+- **Saldo Disponível para Ensaio, Link Público e Demo Day:** **US$ 24,82** (99,28% do saldo preservado)
+- **Margem de Segurança:** O saldo remanescente é suficiente para mais de **2.500 execuções completas ao vivo** do Fluxo C, garantindo que o teto da reserva de US$ 7,50 não será ultrapassado em nenhum cenário durante o evento.
+

@@ -1,15 +1,8 @@
-import type { BudgetSnapshot, ChatMessage, Property } from './contracts'
+import type { ChatMessage, Property } from './contracts'
 
 const today = new Date()
 const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 const day = (value: number) => `${month}-${String(value).padStart(2, '0')}`
-
-export const demoBudget: BudgetSnapshot = {
-  spentUsd: 0,
-  totalUsd: 25,
-  reservedUsd: 7.5,
-  mode: 'mock',
-}
 
 export const properties: readonly Property[] = [
   {

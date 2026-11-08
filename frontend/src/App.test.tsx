@@ -44,6 +44,18 @@ describe('navegação por imóvel', () => {
     expect(screen.queryByText('Mensagem da Aurora')).not.toBeInTheDocument()
   })
 
+  it('permite escolher um orçamento apenas na demonstração local', async () => {
+    const user = userEvent.setup()
+    expect(parseRoute('/imoveis/casa-aurora', '?aba=orcamentos')).toEqual({ view: 'property', propertyId: 'casa-aurora', tab: 'orcamentos' })
+    render(<App />)
+    await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
+    await user.click(screen.getByRole('link', { name: 'Orçamentos' }))
+    await user.click(screen.getByRole('radio', { name: /Volt Reparos/ }))
+    expect(screen.getByRole('radio', { name: /Volt Reparos/ })).toHaveAttribute('aria-checked', 'true')
+    await user.click(screen.getByRole('button', { name: /Escolher Volt Reparos/ }))
+    expect(screen.getByText('Escolha simulada')).toBeInTheDocument()
+    expect(screen.getByText(/nenhuma contratação ou agendamento/)).toBeInTheDocument()
+  })
   it('permite ao anfitrião aprovar um orçamento na sessão ADM e avançar para agendamento', async () => {
     const user = userEvent.setup()
     render(<App />)
@@ -51,7 +63,7 @@ describe('navegação por imóvel', () => {
     await user.click(screen.getByRole('link', { name: 'Agente ⇄ Anfitrião' }))
 
     // Verifica que a síntese de orçamentos e cartões estão visíveis
-    expect(screen.getByText(/Pedimos orçamento/)).toBeInTheDocument()
+    expect(await screen.findByText(/Pedimos orçamento/)).toBeInTheDocument()
     expect(screen.getByText('Carlos Eletricista')).toBeInTheDocument()
     expect(screen.getByText('Volt Reparos')).toBeInTheDocument()
 
@@ -75,7 +87,7 @@ describe('navegação por imóvel', () => {
   it('navega para o painel de auditoria & custos pela barra de navegação', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('link', { name: 'Painel do anfitrião & Custos' }))
+    await user.click(screen.getByRole('link', { name: 'Auditoria' }))
     expect(screen.getByRole('heading', { name: 'Consumo do Orçamento Featherless' })).toBeInTheDocument()
     expect(screen.getByText(/Teto global: US\$/)).toBeInTheDocument()
   })
@@ -95,5 +107,16 @@ describe('navegação por imóvel', () => {
     // Simulador de cenários presente
     expect(screen.getByText('Simulador de Cenários dos Agentes')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Relato de Manutenção/ })).toBeInTheDocument()
+  })
+
+  it('abre e fecha o modal de reset de demonstração para avaliadores', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const resetBtn = screen.getByRole('button', { name: /Resetar Demo/ })
+    expect(resetBtn).toBeInTheDocument()
+    await user.click(resetBtn)
+    expect(screen.getByText('Resetar Dados da Demonstração?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByText('Resetar Dados da Demonstração?')).not.toBeInTheDocument()
   })
 })

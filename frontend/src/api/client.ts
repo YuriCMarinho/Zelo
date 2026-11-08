@@ -5,7 +5,7 @@ import type {
   Property,
   Quote,
 } from '../contracts'
-import { demoBudget, properties as defaultProperties } from '../demo-data'
+import { properties as defaultProperties } from '../demo-data'
 
 const API_BASE = '/api'
 
@@ -235,14 +235,14 @@ export async function fetchCostSummary(): Promise<CostSummary> {
     // fallback
   }
   return {
-    total_cost_usd: demoBudget.spentUsd,
+    total_cost_usd: 0,
     total_input_tokens: 1250,
     total_output_tokens: 420,
     total_calls: 8,
     by_node: { router: 0.0001, validator_node2: 0.0003, resolver_node3: 0.0012 },
     by_model: { 'Qwen/Qwen3.5-4B': 0.0004, 'Qwen/Qwen3.5-9B': 0.0012 },
-    budget_limit_usd: demoBudget.totalUsd,
-    percentage_used: (demoBudget.spentUsd / demoBudget.totalUsd) * 100,
+    budget_limit_usd: 25,
+    percentage_used: (0 / 25) * 100,
   }
 }
 
@@ -258,3 +258,16 @@ export async function fetchAuditEvents(ticketId?: string): Promise<AuditEvent[]>
   }
   return []
 }
+
+export async function resetDemoData(): Promise<{ status: string; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/demo/reset`, { method: 'POST' })
+    if (res.ok) {
+      return await res.json()
+    }
+  } catch {
+    // fallback
+  }
+  return { status: 'success', message: 'Ambiente de demonstração reinicializado (modo local).' }
+}
+

@@ -1,6 +1,6 @@
 export type PropertyId = string
 export type ChatRole = 'hospede' | 'camareira'
-export type PropertyTab = 'visao-geral' | 'chat' | 'adm' | 'auditoria'
+export type PropertyTab = 'visao-geral' | 'chat' | 'adm' | 'auditoria' | 'orcamentos'
 export type OccupancyStatus = 'reserved' | 'maintenance'
 
 export interface Occupancy {
