@@ -62,3 +62,19 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Pula testes com @pytest.mark.real_llm caso -m real_llm não seja passado."""
+    markexpr = config.getoption("markexpr", default="")
+    if "real_llm" not in markexpr:
+        skip_real_llm = pytest.mark.skip(
+            reason=(
+                "Marcador 'real_llm' não especificado (-m real_llm). "
+                "Chamadas pagas desativadas por padrão para proteger o orçamento de US$ 7,50."
+            )
+        )
+        for item in items:
+            if "real_llm" in item.keywords:
+                item.add_marker(skip_real_llm)
+
