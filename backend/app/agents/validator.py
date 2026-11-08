@@ -216,6 +216,23 @@ def _detect_location(text_lower: str) -> str:
     return "Imóvel (Geral)"
 
 
+def maintenance_social_reply(message: str) -> str | None:
+    """Responde a mensagens exclusivamente sociais sem presumir um defeito."""
+    normalized = " ".join(re.sub(r"[^\w\s]", " ", message.casefold()).split())
+    if re.fullmatch(
+        r"(?:(?:oi|olá|ola|bom dia|boa tarde|boa noite|tudo bem|tudo bom)\s*)+",
+        normalized,
+    ):
+        greeting = next(
+            (g.capitalize() for g in ("bom dia", "boa tarde", "boa noite") if g in normalized),
+            "Olá",
+        )
+        return f"{greeting}! Sou o Zelo. Como posso ajudar com as atividades do imóvel hoje?"
+    if re.fullmatch(r"(?:muito )?(?:obrigado|obrigada|valeu|agradeço)", normalized):
+        return "Por nada! Estou por aqui se precisar de ajuda com o imóvel."
+    return None
+
+
 async def handle_maintenance_message(
     prop: Property,
     message: str,
@@ -230,6 +247,11 @@ async def handle_maintenance_message(
     Se suficiente (ou complementado em conversa multi-turn), classifica com Qwen3.5-4B,
     persiste o MaintenanceTicket e retorna confirmação com orientação de segurança se aplicável.
     """
+    # Antes de combinar com relatos anteriores, reconhece saudações e agradecimentos.
+    social_reply = maintenance_social_reply(message)
+    if social_reply is not None:
+        return social_reply, None
+
     effective_message = message.strip()
     if history:
         last_assistant = next(

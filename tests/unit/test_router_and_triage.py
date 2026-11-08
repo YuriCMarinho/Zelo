@@ -532,6 +532,61 @@ def test_api_chat_maintenance_vague_returns_clarification(
     assert "qual cômodo" in data["response_text"].lower() or "qual item" in data["response_text"]
 
 
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        ("bom dia", "Bom dia!"),
+        ("Oi, bom dia! Tudo bem? 😊", "Bom dia!"),
+        ("OLÁ!!!", "Olá!"),
+        ("Boa tarde!", "Boa tarde!"),
+        ("boa noite", "Boa noite!"),
+        ("Obrigada!", "Por nada!"),
+    ],
+)
+def test_cleaner_social_messages_do_not_assume_a_defect(
+    client: TestClient,
+    sample_property: Property,
+    db_session: Session,
+    message: str,
+    expected: str,
+) -> None:
+    payload = {
+        "property_id": sample_property.id,
+        "sender_role": "cleaner",
+        "session_id": "cleaner-social",
+        "channel": "cleaner",
+    }
+    # Reproduz também a saudação após o pedido de esclarecimento incorreto.
+    client.post("/api/chat", json={**payload, "message": "deu problema"})
+    response = client.post("/api/chat", json={**payload, "message": message})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["response_text"].startswith(expected)
+    assert "defeito" not in data["response_text"]
+    assert "inconveniente" not in data["response_text"]
+    assert data["ticket_id"] is None
+    assert data["suggested_actions"] == []
+    assert (
+        db_session.query(MaintenanceTicket).filter_by(property_id=sample_property.id).count() == 0
+    )
+
+
+def test_cleaner_greeting_with_report_still_creates_ticket(
+    client: TestClient,
+    sample_property: Property,
+) -> None:
+    response = client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "sender_role": "cleaner",
+            "message": "Bom dia! A torneira da cozinha está vazando.",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["ticket_id"] is not None
+
+
 def test_api_chat_security_violation_returns_400(
     client: TestClient, sample_property: Property
 ) -> None:
