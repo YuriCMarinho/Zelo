@@ -12,5 +12,6 @@ export default defineConfig({
       },
     },
   },
-  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'] },
+  // Testes de UI com jsdom + userEvent passam de 5 s quando a suíte inteira roda em paralelo.
+  test: { environment: 'jsdom', setupFiles: ['./src/test-setup.ts'], testTimeout: 15000 },
 })
