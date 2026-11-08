@@ -4,7 +4,8 @@ Cobre:
 1. Caminho Feliz Completo via API:
    - Relato no chat do imóvel (POST /api/chat) com remetente hóspede.
    - Roteador identifica manutenção -> Nó 2 cria chamado com extração tipada.
-   - Nó 3 (LangGraph) cota orçamentos com 3 prestadores validados e pausa no interrupt.
+   - Nó 3 (LangGraph) pede orçamentos a 3 prestadores validados e pausa até as respostas.
+   - Cada prestador responde (POST /api/tickets/{id}/quotes/{provider_id}/response).
    - Consulta de orçamentos (GET /api/tickets/{id}/quotes).
    - Anfitrião aprova na sessão do imóvel (POST /api/tickets/{id}/approve).
    - Nó 3 agenda via Urgência x Agenda, confirma data com prestador, notifica inquilino
@@ -137,7 +138,18 @@ def test_full_maintenance_happy_path_e2e(
     assert ticket_id is not None
     assert len(ticket_id) > 0
 
-    # --- PASSO 2: Verificação do Chamado e Cotações em AWAITING_ADM_APPROVAL ---
+    # --- PASSO 2: Nó 3 pede orçamentos e espera; cada prestador responde ---
+    waiting = client.get(f"/api/tickets/{ticket_id}").json()
+    assert waiting["status"] == TicketStatus.WAITING_QUOTES.value
+    pending = client.get(f"/api/tickets/{ticket_id}/quotes").json()
+    assert all(q["amount"] is None for q in pending)  # nada inventado antes da resposta
+    for idx, q in enumerate(pending):
+        reply = client.post(
+            f"/api/tickets/{ticket_id}/quotes/{q['provider_id']}/response",
+            json={"amount": 250 + idx * 30, "description": "Troca do cano e vedação"},
+        )
+        assert reply.status_code == 200, reply.text
+
     ticket_resp = client.get(f"/api/tickets/{ticket_id}")
     assert ticket_resp.status_code == 200
     ticket_data = ticket_resp.json()
@@ -171,9 +183,12 @@ def test_full_maintenance_happy_path_e2e(
     }
     approve_resp = client.post(f"/api/tickets/{ticket_id}/approve", json=approval_payload)
     assert approve_resp.status_code == 200, f"Erro na aprovação: {approve_resp.text}"
-    resolved_ticket_data = approve_resp.json()
+    assert approve_resp.json()["status"] == TicketStatus.WAITING_DATE_CONFIRMATION.value
 
-    # --- PASSO 4: Validação do Chamado Finalizado ---
+    # --- PASSO 4: Prestador confirma o dia (devolutiva) e o chamado é finalizado ---
+    date_resp = client.post(f"/api/tickets/{ticket_id}/date-response", json={"accepted": True})
+    assert date_resp.status_code == 200, date_resp.text
+    resolved_ticket_data = date_resp.json()
     assert resolved_ticket_data["status"] == TicketStatus.RESOLVED.value
     assert resolved_ticket_data["selected_provider_id"] == chosen_provider.id
     assert resolved_ticket_data["scheduled_date"] is not None
@@ -202,9 +217,8 @@ def test_full_maintenance_happy_path_e2e(
     )
     assert len(audit_events) >= 1
     event_types = [e.event_type for e in audit_events]
-    assert "ticket_resolved" in event_types or "notify_tenant_and_resolve" in [
-        e.node for e in audit_events
-    ]
+    assert "ticket_resolved" in event_types
+    assert "tenant_notified" in event_types
 
 
 # ==============================================================================

@@ -1,8 +1,8 @@
 """Testes de integração para os 5 Caminhos Alternativos Obrigatórios (S2-T8).
 
 Cobre:
-1. Fallback Nó S: Nenhum prestador no DB para a categoria/região -> status NO_PROVIDERS_FALLBACK,
-   acionamento de coleta sob demanda do Nó S (collect_on_demand) e registro de auditoria/alerta ao ADM.
+1. Fallback Nó S: nenhum prestador no DB para a categoria/região -> NO_PROVIDERS_FALLBACK,
+   coleta sob demanda do Nó S em segundo plano e auditoria/alerta ao ADM.
 2. Timeout de prestador respondendo cotação:
    - Timer de timeout registrado no ciclo de vida nativo do grafo.
    - Zero prestadores/orçamentos escalona ao ADM (ESCALATED_TO_ADM).
@@ -28,18 +28,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.agents import resolver_graph
 from app.agents.resolver_graph import (
     LangGraphResolverStarter,
     compiled_resolver_graph,
-    request_and_receive_quotes,
+    on_quote_timeout,
+    record_date_response,
+    record_quote_response,
     resume_resolution,
 )
 from app.agents.resolver_timeouts import (
     clear_active_timeouts,
     get_active_timeouts,
 )
-from app.core.llm import LLMResponse
 from app.db.models import AuditEvent, Booking, MaintenanceTicket, Property, Provider, Quote
 from app.schemas.common import (
     ProviderCategory,
@@ -81,10 +81,34 @@ async def run_resolution_until_pause(
     run_id: str,
     db: Session,
 ) -> dict[str, Any]:
-    """Helper reutilizável para inicializar a resolução de chamados no grafo até a pausa humana."""
+    """Inicia a resolução e, se houver pedidos de orçamento, responde por todos os prestadores.
+
+    O Nó 3 não inventa orçamentos: ele pausa até cada prestador responder. Este helper
+    simula as respostas (canal simulado) para levar o chamado até a decisão do ADM.
+    """
     starter = LangGraphResolverStarter(compiled_resolver_graph)
-    req = ResolutionRequest(ticket_id=ticket_id, property_id=property_id, run_id=run_id)
-    return await starter.astart_resolution(req, db=db)
+    req = ResolutionRequest(ticket_id=ticket_id, run_id=run_id)
+    state = await starter.astart_resolution(req, db=db)
+    await answer_all_quotes(db, ticket_id)
+    return state
+
+
+async def answer_all_quotes(db: Session, ticket_id: str) -> None:
+    """Cada prestador consultado envia seu orçamento pelo canal (endpoint/simulador)."""
+    pending = (
+        db.query(Quote)
+        .filter(Quote.ticket_id == ticket_id, Quote.status == QuoteStatus.REQUESTED.value)
+        .all()
+    )
+    for idx, quote in enumerate(pending):
+        await record_quote_response(
+            ticket_id=ticket_id,
+            provider_id=quote.provider_id,
+            amount=200.0 + idx * 40,
+            description="Serviço completo com garantia",
+            availability="Esta semana",
+        )
+    db.expire_all()
 
 
 # ==============================================================================
@@ -120,9 +144,13 @@ async def test_alt_path_1_no_providers_triggers_node_s_fallback(
     db_session.add(ticket)
     db_session.commit()
 
-    with patch(
-        "app.agents.resolver_graph.collect_on_demand", new_callable=AsyncMock
-    ) as mock_collect:
+    spawned: list[Any] = []
+    with (
+        patch("app.agents.resolver_graph._spawn", spawned.append),
+        patch(
+            "app.agents.resolver_graph.collect_on_demand", new_callable=AsyncMock
+        ) as mock_collect,
+    ):
         mock_collect.return_value = 0
         state = await run_resolution_until_pause(
             ticket_id=ticket.id,
@@ -130,6 +158,9 @@ async def test_alt_path_1_no_providers_triggers_node_s_fallback(
             run_id=ticket.run_id,
             db=db_session,
         )
+        # A coleta do Nó S roda em segundo plano, sem bloquear o grafo
+        assert len(spawned) == 1
+        await spawned[0]
         mock_collect.assert_awaited_once()
 
     db_session.refresh(ticket)
@@ -193,10 +224,20 @@ async def test_alt_path_2_zero_providers_escalates_to_adm(
 ) -> None:
     """Caminho 2 (Cenário A - Zero Respostas):
 
-    Quando não há prestadores disponíveis no passo de cotação (zero respostas),
-    o nó request_and_receive_quotes escalona diretamente o chamado para o anfitrião
-    com status ESCALATED_TO_ADM.
+    Os prestadores foram consultados mas nenhum respondeu até o timeout de cotação:
+    o chamado é escalado ao anfitrião (ESCALATED_TO_ADM) e os pedidos viram TIMEOUT.
     """
+    db_session.add(
+        Provider(
+            id="prov-elec-alt-silent",
+            name="Elétrica Silenciosa",
+            category=ProviderCategory.ELECTRICIAN.value,
+            region="São Paulo",
+            phone="+55 11 98888-7777",
+            is_validated=True,
+            rating=4.1,
+        )
+    )
     ticket = MaintenanceTicket(
         id="tick-alt-zero-quotes-001",
         run_id="run-alt-zero-001",
@@ -206,24 +247,25 @@ async def test_alt_path_2_zero_providers_escalates_to_adm(
         urgency=TicketUrgency.NORMAL.value,
         location_in_property="Quadro geral",
         description="Fiação em curto.",
-        status=TicketStatus.REQUESTING_QUOTES.value,
+        status=TicketStatus.OPEN.value,
     )
     db_session.add(ticket)
     db_session.commit()
 
-    # Executa nó sem nenhum candidato disponível
-    empty_state: Any = {
-        "ticket_id": ticket.id,
-        "run_id": ticket.run_id,
-        "property_id": alt_property.id,
-        "candidate_providers": [],
-    }
-    result = await request_and_receive_quotes(empty_state)
-
+    starter = LangGraphResolverStarter(compiled_resolver_graph)
+    await starter.astart_resolution(
+        ResolutionRequest(ticket_id=ticket.id, run_id=ticket.run_id), db=db_session
+    )
     db_session.refresh(ticket)
-    assert result["status"] == TicketStatus.ESCALATED_TO_ADM.value
+    assert ticket.status == TicketStatus.WAITING_QUOTES.value
+
+    await on_quote_timeout(ticket.id, ticket.run_id)
+
+    db_session.expire_all()
+    db_session.refresh(ticket)
     assert ticket.status == TicketStatus.ESCALATED_TO_ADM.value
-    assert "Nenhum prestador disponível" in result.get("error", "")
+    quotes = db_session.query(Quote).filter_by(ticket_id=ticket.id).all()
+    assert quotes and all(q.status == QuoteStatus.TIMEOUT.value for q in quotes)
 
 
 @pytest.mark.asyncio
@@ -261,16 +303,15 @@ async def test_alt_path_2_quote_timeout_lifecycle_and_callback(
     db_session.add(ticket)
     db_session.commit()
 
-    # Executa até a pausa do ADM
-    await run_resolution_until_pause(
-        ticket_id=ticket.id,
-        property_id=alt_property.id,
-        run_id=ticket.run_id,
-        db=db_session,
+    # O Nó 3 pede o orçamento e registra o timer de cotação enquanto espera
+    starter = LangGraphResolverStarter(compiled_resolver_graph)
+    await starter.astart_resolution(
+        ResolutionRequest(ticket_id=ticket.id, run_id=ticket.run_id), db=db_session
     )
+    assert f"timeout_quote_{ticket.id}" in get_active_timeouts()
 
-    # Verifica que cotações foram coletadas e o timer de cotação foi cancelado
-    # após a conclusão bem-sucedida do passo
+    # Quando o prestador responde, o timer é cancelado
+    await answer_all_quotes(db_session, ticket.id)
     assert f"timeout_quote_{ticket.id}" not in get_active_timeouts()
 
     # O chamado prosseguiu para a síntese do ADM com os orçamentos recebidos
@@ -355,6 +396,10 @@ async def test_alt_path_3_adm_reminder_native_timeout_flow(
 
     assert job_id not in get_active_timeouts()
     db_session.refresh(ticket)
+    assert ticket.status == TicketStatus.WAITING_DATE_CONFIRMATION.value
+
+    await record_date_response(ticket.id, accepted=True, message="Confirmo.")
+    db_session.refresh(ticket)
     assert ticket.status == TicketStatus.RESOLVED.value
 
 
@@ -408,51 +453,22 @@ async def test_alt_path_4_provider_refuses_date_retries_and_succeeds(
         db=db_session,
     )
 
-    # Configura mock de generate para responder RECUSO na 1ª vez e ACEITO na 2ª vez
-    original_generate = resolver_graph.generate
-    call_count = 0
-
-    async def mock_generate(*args: Any, **kwargs: Any) -> LLMResponse:
-        nonlocal call_count
-        node = kwargs.get("node")
-        r_id = kwargs.get("run_id", "run-mock")
-        if node == "resolver_date_confirm":
-            call_count += 1
-            if call_count == 1:
-                return LLMResponse(
-                    content="RECUSO: Não posso atender nesta data, estou com outra pintura em andamento.",
-                    model="Qwen/Qwen3.5-4B",
-                    input_tokens=20,
-                    output_tokens=15,
-                    cost_usd=0.0,
-                    is_mock=True,
-                    run_id=r_id,
-                    node=node,
-                )
-            else:
-                return LLMResponse(
-                    content="ACEITO: Confirmo minha presença nesta segunda data proposta.",
-                    model="Qwen/Qwen3.5-4B",
-                    input_tokens=20,
-                    output_tokens=15,
-                    cost_usd=0.0,
-                    is_mock=True,
-                    run_id=r_id,
-                    node=node,
-                )
-        return await original_generate(*args, **kwargs)
-
-    monkeypatch.setattr(resolver_graph, "generate", mock_generate)
-
-    # Retoma com aprovação do ADM
-    final_state = await resume_resolution(
+    await resume_resolution(
         ticket_id=ticket.id,
         provider_id=provider.id,
         graph=compiled_resolver_graph,
     )
 
+    # Prestador recusa a 1ª data e aceita a 2ª (devolutiva do dia real)
+    await record_date_response(ticket.id, accepted=False, message="Estou com outra obra.")
     db_session.refresh(ticket)
-    assert call_count == 2
+    assert ticket.status == TicketStatus.WAITING_DATE_CONFIRMATION.value
+    await record_date_response(ticket.id, accepted=True, message="Confirmo a nova data.")
+
+    final_state = compiled_resolver_graph.get_state(
+        {"configurable": {"thread_id": ticket.id}}
+    ).values
+    db_session.refresh(ticket)
     assert ticket.status == TicketStatus.RESOLVED.value
     assert final_state.get("status") == TicketStatus.RESOLVED.value
     assert final_state.get("retry_date_count") == 1
@@ -503,38 +519,22 @@ async def test_alt_path_4_provider_refuses_3_times_escalates_to_adm(
         db=db_session,
     )
 
-    # Sempre recusa datas
-    original_generate = resolver_graph.generate
-
-    async def mock_always_refuse(*args: Any, **kwargs: Any) -> LLMResponse:
-        node = kwargs.get("node")
-        r_id = kwargs.get("run_id", "run-mock")
-        if node == "resolver_date_confirm":
-            return LLMResponse(
-                content="RECUSO: Totalmente sem disponibilidade esta semana.",
-                model="Qwen/Qwen3.5-4B",
-                input_tokens=20,
-                output_tokens=10,
-                cost_usd=0.0,
-                is_mock=True,
-                run_id=r_id,
-                node=node,
-            )
-        return await original_generate(*args, **kwargs)
-
-    monkeypatch.setattr(resolver_graph, "generate", mock_always_refuse)
-
-    final_state = await resume_resolution(
+    await resume_resolution(
         ticket_id=ticket.id,
         provider_id=provider.id,
         graph=compiled_resolver_graph,
     )
+    for _ in range(3):
+        await record_date_response(ticket.id, accepted=False, message="Sem disponibilidade.")
 
+    final_state = compiled_resolver_graph.get_state(
+        {"configurable": {"thread_id": ticket.id}}
+    ).values
     db_session.refresh(ticket)
     assert ticket.status == TicketStatus.ESCALATED_TO_ADM.value
     assert final_state.get("status") == TicketStatus.ESCALATED_TO_ADM.value
     assert final_state.get("retry_date_count") >= 3
-    assert "escalado ao anfitrião" in (final_state.get("error") or "").lower()
+    assert "recusou 3 datas" in (final_state.get("error") or "").lower()
 
 
 # ==============================================================================
@@ -648,12 +648,16 @@ async def test_alt_path_5_empty_property_skips_tenant_notification_e2e(
         db=db_session,
     )
 
-    # Retoma com aprovação do ADM
-    final_state = await resume_resolution(
+    # Retoma com aprovação do ADM e confirma a data com o prestador
+    await resume_resolution(
         ticket_id=ticket.id,
         provider_id=provider.id,
         graph=compiled_resolver_graph,
     )
+    await record_date_response(ticket.id, accepted=True, message=None)
+    final_state = compiled_resolver_graph.get_state(
+        {"configurable": {"thread_id": ticket.id}}
+    ).values
 
     db_session.refresh(ticket)
     assert ticket.status == TicketStatus.RESOLVED.value
