@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zelo — Pitch Demo Day</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #17323A;
+      --navy-dark: #0E2026;
+      --navy-light: #244B57;
+      --sand: #F6F3EE;
+      --sand-subtle: #EFECE5;
+      --amber: #F2A541;
+      --amber-light: #FDF3E7;
+      --amber-dark: #D98825;
+      --white: #FFFFFF;
+      --text-muted: rgba(23, 50, 58, 0.72);
+      --border-subtle: rgba(23, 50, 58, 0.12);
+      --shadow-sm: 0 4px 12px rgba(23, 50, 58, 0.06);
+      --shadow-md: 0 12px 28px rgba(23, 50, 58, 0.08);
+      --shadow-lg: 0 20px 40px rgba(23, 50, 58, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--navy-dark);
+      color: var(--navy);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Deck Container */
+    #deck {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      max-width: 1440px;
+      max-height: 900px;
+      aspect-ratio: 16 / 9;
+      background: var(--sand);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 50px rgba(0,0,0,0.4);
+    }
+
+    @media (min-width: 1440px) and (min-height: 900px) {
+      #deck {
+        border-radius: 20px;
+      }
+    }
+
+    /* Progress Bar */
+    .progress-bar-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 5px;
+      background: rgba(23, 50, 58, 0.08);
+      z-index: 100;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 12.5%;
+      background: var(--amber);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Slides Wrapper */
+    .slides-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 56px 80px 72px 80px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(40px);
+      transition: opacity 0.4s ease, transform 0.4s ease, visibility 0.4s;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+      z-index: 10;
+    }
+
+    .slide.prev {
+      transform: translateX(-40px);
+    }
+
+    /* Typography */
+    h1, h2, h3, .heading-font {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(23, 50, 58, 0.08);
+      color: var(--navy);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
+    .badge-amber {
+      background: var(--amber);
+      color: var(--navy);
+    }
+
+    .badge-navy {
+      background: var(--navy);
+      color: var(--sand);
+    }
+
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 36px;
+    }
+
+    .slide-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slide-title {
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.15;
+      color: var(--navy);
+    }
+
+    .slide-subtitle {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 800px;
+      line-height: 1.45;
+    }
+
+    /* Navigation Controls Bar */
+    .controls {
+      position: absolute;
+      bottom: 24px;
+      right: 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      z-index: 100;
+    }
+
+    .nav-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      background: var(--white);
+      color: var(--navy);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: var(--navy);
+      color: var(--sand);
+      border-color: var(--navy);
+      transform: translateY(-1px);
+    }
+
+    .slide-counter {
+      font-family: 'Plus Jakarta Sans', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      padding: 0 4px;
+    }
+
+    .timer-pill {
+      position: absolute;
+      bottom: 24px;
+      left: 40px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(23, 50, 58, 0.06);
+      font-family: 'Plus Jakarta Sans', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      z-index: 100;
+    }
+
+    .timer-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+
+    /* SLIDE 1: COVER */
+    .slide-cover {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100%;
+    }
+
+    .cover-top {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .brand-logo-text {
+      font-size: 52px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--navy);
+    }
+
+    .cover-body {
+      max-width: 980px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      margin-top: -20px;
+    }
+
+    .cover-headline {
+      font-size: 64px;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+      color: var(--navy);
+    }
+
+    .cover-headline span {
+      color: var(--amber-dark);
+      background: linear-gradient(135deg, #F2A541 0%, #D97706 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .cover-tagline {
+      font-size: 24px;
+      line-height: 1.4;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .cover-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .cover-meta {
+      display: flex;
+      gap: 28px;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .meta-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .meta-val {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+
+    /* SLIDE 2: PROBLEM */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      flex-grow: 1;
+    }
+
+    .problem-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 36px 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-subtle);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .problem-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: #EF4444;
+    }
+
+    .card-num {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 44px;
+      font-weight: 800;
+      color: rgba(23, 50, 58, 0.16);
+      line-height: 1;
+    }
+
+    .card-content {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--navy);
+      line-height: 1.25;
+    }
+
+    .card-desc {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .card-highlight {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(239, 68, 68, 0.08);
+      color: #B91C1C;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 16px;
+    }
+
+    /* SLIDE 3: SOLUTION */
+    .solution-layout {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 40px;
+      flex-grow: 1;
+      align-items: center;
+    }
+
+    .solution-left {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .big-quote-box {
+      background: var(--navy);
+      color: var(--sand);
+      border-radius: 24px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .big-quote {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+
+    .big-quote span {
+      color: var(--amber);
+    }
+
+    .big-quote-desc {
+      font-size: 16px;
+      opacity: 0.85;
+      line-height: 1.6;
+    }
+
+    .solution-features {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .feature-pill {
+      background: var(--white);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .feature-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--sand-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--navy);
+    }
+
+    .feature-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .feature-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* SLIDE 4: THE 4 STEPS FLOW */
+    .flow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      flex-grow: 1;
+      margin-top: 10px;
+    }
+
+    .step-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-subtle);
+      position: relative;
+    }
+
+    .step-card.active-step {
+      border: 2px solid var(--amber);
+      box-shadow: var(--shadow-md);
+    }
+
+    .step-badge {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .step-number {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--navy);
+      color: var(--sand);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 18px 0 10px;
+      line-height: 1.25;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      flex-grow: 1;
+    }
+
+    .step-actor {
+      margin-top: 16px;
+      padding: 8px 12px;
+      background: var(--sand);
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--navy);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* SLIDE 5: LIVE MOCKUPS SHOWCASE */
+    .mockup-showcase {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 48px;
+      flex-grow: 1;
+      align-items: center;
+    }
+
+    /* Mobile Chat Shell */
+    .mobile-shell {
+      background: #FFFFFF;
+      border-radius: 36px;
+      padding: 16px;
+      box-shadow: var(--shadow-lg);
+      border: 6px solid #1E293B;
+      display: flex;
+      flex-direction: column;
+      height: 520px;
+      overflow: hidden;
+    }
+
+    .mobile-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(23,50,58,0.1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mobile-chat-feed {
+      flex: 1;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13px;
+      overflow-y: auto;
+    }
+
+    .msg-user {
+      align-self: flex-end;
+      background: var(--navy);
+      color: var(--sand);
+      padding: 10px 12px;
+      border-radius: 14px 14px 2px 14px;
+      max-width: 80%;
+      line-height: 1.4;
+    }
+
+    .msg-agent {
+      align-self: flex-start;
+      background: var(--sand);
+      color: var(--navy);
+      padding: 10px 12px;
+      border-radius: 14px 14px 14px 2px;
+      max-width: 85%;
+      line-height: 1.4;
+    }
+
+    .msg-badge {
+      background: var(--amber);
+      color: var(--navy);
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Host Desktop Comparison Card */
+    .host-approval-showcase {
+      background: var(--white);
+      border-radius: 24px;
+      padding: 36px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .host-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .provider-cards-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .provider-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-radius: 16px;
+      border: 1px solid var(--border-subtle);
+      background: var(--sand);
+      transition: all 0.2s;
+    }
+
+    .provider-row.recommended {
+      border: 2px solid var(--navy);
+      background: var(--white);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .p-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .p-name {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--navy);
+    }
+
+    .p-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .p-price {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      color: var(--navy);
+    }
+
+    .btn-approve {
+      background: var(--navy);
+      color: var(--sand);
+      font-weight: 700;
+      font-size: 16px;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* SLIDE 6: AGENT ARCHITECTURE */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      flex-grow: 1;
+    }
+
+    .arch-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 30px 24px;
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .arch-badge-tech {
+      font-family: monospace;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(23, 50, 58, 0.08);
+      color: var(--navy);
+      width: fit-content;
+      font-weight: 700;
+    }
+
+    .arch-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--navy);
+      line-height: 1.25;
+    }
+
+    .arch-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .arch-points {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--navy);
+    }
+
+    .arch-points li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .arch-points li::before {
+      content: '✓';
+      color: var(--amber-dark);
+      font-weight: 800;
+    }
+
+    /* SLIDE 7: BUSINESS & MARKET */
+    .market-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 36px;
+      flex-grow: 1;
+      align-items: center;
+    }
+
+    .stat-cards-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .stat-card-big {
+      background: var(--white);
+      border-radius: 22px;
+      padding: 28px 32px;
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .stat-number {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 48px;
+      font-weight: 800;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .stat-desc {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+
+    .business-model-box {
+      background: var(--navy);
+      color: var(--sand);
+      border-radius: 24px;
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .bm-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .bm-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(242, 165, 65, 0.2);
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .bm-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bm-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .bm-desc {
+      font-size: 14px;
+      opacity: 0.8;
+      line-height: 1.45;
+    }
+
+    /* SLIDE 8: CLOSING / DEMO CALL */
+    .closing-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      flex-grow: 1;
+      gap: 32px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .closing-headline {
+      font-size: 56px;
+      font-weight: 800;
+      color: var(--navy);
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .closing-headline span {
+      color: var(--amber-dark);
+    }
+
+    .closing-sub {
+      font-size: 20px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .btn-live-demo {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 40px;
+      border-radius: 18px;
+      background: var(--navy);
+      color: var(--sand);
+      font-size: 20px;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: var(--shadow-lg);
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .btn-live-demo:hover {
+      transform: translateY(-2px);
+      background: var(--navy-dark);
+    }
+
+    .team-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* Keybind Hint Overlay */
+    .key-hints {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(23, 50, 58, 0.45);
+      letter-spacing: 0.05em;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="deck">
+    <!-- Progress Bar -->
+    <div class="progress-bar-container">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+
+    <!-- Timer -->
+    <div class="timer-pill">
+      <div class="timer-dot"></div>
+      <span id="pitchTimer">00:00</span>
+    </div>
+
+    <!-- Keyboard Hints -->
+    <div class="key-hints">Use ← → ou Barra de Espaço para navegar · [F] Tela cheia</div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <span id="slideCounter" class="slide-counter">01 / 08</span>
+      <button id="prevBtn" class="nav-btn" aria-label="Slide anterior">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button id="nextBtn" class="nav-btn" aria-label="Próximo slide">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button id="fullscreenBtn" class="nav-btn" aria-label="Tela cheia">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+    </div>
+
+    <!-- Slides Wrapper -->
+    <div class="slides-wrapper">
+
+      <!-- SLIDE 1: CAPA -->
+      <section class="slide slide-cover active" data-index="1">
+        <div class="cover-top">
+          <svg width="56" height="56" viewBox="0 0 72 72" role="img" aria-label="Símbolo Zelo">
+            <rect width="72" height="72" rx="20" fill="#17323A"></rect>
+            <path d="M18 36 L36 21 L54 36" fill="none" stroke="#F6F3EE" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M25 33 V51 H47 V33" fill="none" stroke="#F6F3EE" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            <circle cx="36" cy="41.5" r="4.5" fill="#F2A541"></circle>
+          </svg>
+          <span class="brand-logo-text heading-font">zelo</span>
+          <span class="badge badge-amber" style="margin-left: 12px;">Hackathon Converge AI</span>
+        </div>
+
+        <div class="cover-body">
+          <h1 class="cover-headline">
+            O Co-anfitrião de Operações Autônomo para <span>Imóveis de Temporada</span>.
+          </h1>
+          <p class="cover-tagline">
+            "Quebrou algo no imóvel? A gente resolve de ponta a ponta. Você só aprova."
+          </p>
+        </div>
+
+        <div class="cover-footer">
+          <div class="cover-meta">
+            <div class="meta-item">
+              <span class="meta-label">Desafio</span>
+              <span class="meta-val">Agentes de IA End-to-End</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Público-Alvo</span>
+              <span class="meta-val">Gestores Multi-Imóveis (5 a 30 un.)</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Tecnologia</span>
+              <span class="meta-val">LangGraph + FastAPI + React</span>
+            </div>
+          </div>
+          <span class="badge badge-navy">Demo Day 2026</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 2: O PROBLEMA -->
+      <section class="slide" data-index="2">
+        <div class="slide-header">
+          <div class="slide-title-group">
+            <span class="badge">O Cenário Real</span>
+            <h2 class="slide-title">O Pesadelo da Sexta-Feira, 18h no Airbnb</h2>
+            <p class="slide-subtitle">O hóspede chega cansado da viagem, entra no apartamento e descobre que o chuveiro está gelado.</p>
+          </div>
+        </div>
+
+        <div class="problem-grid">
+          <div class="problem-card">
+            <div>
+              <span class="card-num">01</span>
+              <div class="card-content">
+                <h3 class="card-title">2 Horas de Caos Operacional</h3>
+                <p class="card-desc">O gestor precisa largar o jantar de família e disparar dezenas de mensagens no WhatsApp caçando eletricistas desconhecidos.</p>
+              </div>
+            </div>
+            <div class="card-highlight">WhatsApp desordenado e sem garantia</div>
+          </div>
+
+          <div class="problem-card">
+            <div>
+              <span class="card-num">02</span>
+              <div class="card-content">
+                <h3 class="card-title">O Terror da Nota 1 Estrela</h3>
+                <p class="card-desc">No aluguel de temporada, um banho frio vira avaliação negativa. Uma única nota 1 estrela rebaixa o anúncio no algoritmo e destrói o faturamento por meses.</p>
+              </div>
+            </div>
+            <div class="card-highlight">Risco imediato de reembolso e cancelamento</div>
+          </div>
+
+          <div class="problem-card">
+            <div>
+              <span class="card-num">03</span>
+              <div class="card-content">
+                <h3 class="card-title">Impossível Escalar</h3>
+                <p class="card-desc">Cuidar de 5 imóveis já é estressante. Chegar a 20 ou 30 imóveis exige contratar pessoas só para apagar incêndios no telefone.</p>
+              </div>
+            </div>
+            <div class="card-highlight">Gargalo operacional bloqueia o crescimento</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 3: A SOLUÇÃO -->
+      <section class="slide" data-index="3">
+        <div class="slide-header">
+          <div class="slide-title-group">
+            <span class="badge badge-amber">Apresentando o Zelo</span>
+            <h2 class="slide-title">Autonomia Operacional com Controle Humano</h2>
+            <p class="slide-subtitle">O Zelo assume todo o atrito de manutenção: do primeiro relato ao agendamento final.</p>
+          </div>
+        </div>
+
+        <div class="solution-layout">
+          <div class="solution-left">
+            <div class="big-quote-box">
+              <p class="big-quote">
+                Transforme <span>2 horas de pânico</span> em <span>1 clique de aprovação</span>.
+              </p>
+              <p class="big-quote-desc">
+                Os agentes de IA do Zelo diagnosticam o problema, pesquisam profissionais pré-qualificados, cotam preços no WhatsApp e montam uma proposta comparativa mastigada. O anfitrião só escolhe.
+              </p>
+            </div>
+          </div>
+
+          <div class="solution-features">
+            <div class="feature-pill">
+              <div class="feature-icon-box">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div class="feature-text">
+                <span class="feature-title">Proteção Blindada de 5 Estrelas</span>
+                <span class="feature-desc">Atendimento empático imediato ao hóspede em segundos, evitando reclamações públicas.</span>
+              </div>
+            </div>
+
+            <div class="feature-pill">
+              <div class="feature-icon-box">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
+              <div class="feature-text">
+                <span class="feature-title">Human-in-the-Loop Obrigatório</span>
+                <span class="feature-desc">A IA nunca contrata ou gasta dinheiro sozinha. O anfitrião mantém a decisão final.</span>
+              </div>
+            </div>
+
+            <div class="feature-pill">
+              <div class="feature-icon-box">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div class="feature-text">
+                <span class="feature-title">Respeito à Agenda do Imóvel</span>
+                <span class="feature-desc">Se o conserto for urgente, entra na hora. Se for leve, agenda na janela vaga entre estadias.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 4: O FLUXO DE 4 PASSOS -->
+      <section class="slide" data-index="4">
+        <div class="slide-header">
+          <div class="slide-title-group">
+            <span class="badge">Jornada de Ponta a Ponta</span>
+            <h2 class="slide-title">Como a Mágica Acontece em 4 Passos</h2>
+            <p class="slide-subtitle">Uma orquestração inteligente entre hóspede, prestador local e o anfitrião.</p>
+          </div>
+        </div>
+
+        <div class="flow-steps">
+          <div class="step-card">
+            <div>
+              <div class="step-badge">
+                <div class="step-number">1</div>
+                <span class="badge">Entrada</span>
+              </div>
+              <h3 class="step-title">Relato Acolhedor</h3>
+              <p class="step-desc">O hóspede (ou camareira) relata o defeito no chat do Zelo. A IA acolhe com empatia e faz 1 pergunta técnica essencial de triagem.</p>
+            </div>
+            <div class="step-actor">
+              <span>👤 Hóspede & Nó 2</span>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-badge">
+                <div class="step-number">2</div>
+                <span class="badge">Autônomo</span>
+              </div>
+              <h3 class="step-title">Cotação no WhatsApp</h3>
+              <p class="step-desc">O Nó 3 consulta a base de prestadores pré-validados pelo Nó S e dispara pedidos diretos de orçamento e disponibilidade.</p>
+            </div>
+            <div class="step-actor">
+              <span>⚡ Nó 3 & Prestadores</span>
+            </div>
+          </div>
+
+          <div class="step-card active-step">
+            <div>
+              <div class="step-badge">
+                <div class="step-number" style="background: var(--amber); color: var(--navy);">3</div>
+                <span class="badge badge-amber">Decisão</span>
+              </div>
+              <h3 class="step-title">1 Clique no Painel</h3>
+              <p class="step-desc">O gestor recebe o comparativo de preços, notas e janelas de atendimento, e clica em "Aprovar Carlos (R$ 180)".</p>
+            </div>
+            <div class="step-actor" style="background: var(--amber-light);">
+              <span>👑 Anfitrião no Controle</span>
+            </div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-badge">
+                <div class="step-number">4</div>
+                <span class="badge">Fechamento</span>
+              </div>
+              <h3 class="step-title">Agendamento & Acesso</h3>
+              <p class="step-desc">O agente confirma com o prestador, bloqueia a agenda do imóvel e notifica o hóspede com as instruções de chave/portaria.</p>
+            </div>
+            <div class="step-actor">
+              <span>🎯 Ciclo Fechado</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 5: EXPERIÊNCIA E TELAS (MOCKUPS) -->
+      <section class="slide" data-index="5">
+        <div class="slide-header">
+          <div class="slide-title-group">
+            <span class="badge badge-navy">Experiência Zelo</span>
+            <h2 class="slide-title">Design Sofisticado, Simples e Acolhedor</h2>
+            <p class="slide-subtitle">A tecnologia fica invisível; o anfitrião e o hóspede sentem cuidado e eficiência.</p>
+          </div>
+        </div>
+
+        <div class="mockup-showcase">
+          <!-- Chat Mobile -->
+          <div class="mobile-shell">
+            <div class="mobile-header">
+              <svg width="32" height="32" viewBox="0 0 72 72">
+                <rect width="72" height="72" rx="20" fill="#17323A"></rect>
+                <circle cx="36" cy="41.5" r="5" fill="#F2A541"></circle>
+              </svg>
+              <div>
+                <div style="font-weight: 700; font-size: 14px;">Apto 302 · Cabo Branco</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Atendimento do seu anfitrião</div>
+              </div>
+            </div>
+            <div class="mobile-chat-feed">
+              <div class="msg-user">Oi, o chuveiro não está esquentando 😕</div>
+              <div class="msg-agent">Poxa, sinto muito pelo incômodo! Já estamos cuidando disso. Só para chamar a pessoa certa: a água sai fria ou não sai nada?</div>
+              <div class="msg-user">Sai, mas bem fria</div>
+              <div class="msg-agent">Perfeito! Um eletricista de confiança virá amanhã às 9h. Te aviso quando ele estiver a caminho.</div>
+              <div class="msg-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                Visita marcada · amanhã, 9h
+              </div>
+            </div>
+          </div>
+
+          <!-- Host Desktop Approval Card -->
+          <div class="host-approval-showcase">
+            <div class="host-header-bar">
+              <div>
+                <span class="badge badge-amber" style="margin-bottom: 8px;">Aguardando sua decisão</span>
+                <h3 style="font-size: 24px; font-weight: 800; color: var(--navy);">Chuveiro sem água quente</h3>
+                <span style="font-size: 14px; color: var(--text-muted);">Apto 302 · Banheiro · Pedimos orçamento a 5 eletricistas. 3 responderam.</span>
+              </div>
+            </div>
+
+            <div class="provider-cards-list">
+              <div class="provider-row recommended">
+                <div class="p-info">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="p-name">Carlos Eletricista</span>
+                    <span class="badge" style="font-size: 11px; padding: 2px 8px; background: rgba(242,165,65,0.2); color: #B45309;">Recomendado</span>
+                  </div>
+                  <span class="p-meta">★ 4.9 (128 avaliações) · Disponível Amanhã às 09h</span>
+                </div>
+                <span class="p-price">R$ 180</span>
+              </div>
+
+              <div class="provider-row">
+                <div class="p-info">
+                  <span class="p-name">Volt Reparos Rápidos</span>
+                  <span class="p-meta">★ 4.7 (64 avaliações) · Disponível Hoje às 17h</span>
+                </div>
+                <span class="p-price">R$ 240</span>
+              </div>
+            </div>
+
+            <button class="btn-approve">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+              Aprovar Carlos Eletricista · R$ 180
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 6: ARQUITETURA E ENGENHARIA -->
+      <section class="slide" data-index="6">
+        <div class="slide-header">
+          <div class="slide-title-group">
+            <span class="badge">Sob o Capô</span>
+            <h2 class="slide-title">Arquitetura de Agentes State-of-the-Art</h2>
+            <p class="slide-subtitle">LangGraph, APScheduler e FastAPI: construído para robustez, rastreabilidade e baixo custo.</p>
+          </div>
+        </div>
+
+        <div class="arch-grid">
+          <div class="arch-card">
+            <div class="arch-badge-tech">Roteador & Nó 2</div>
+            <h3 class="arch-title">Triagem Leve & Contratos Rígidos</h3>
+            <p class="arch-desc">Roteador determinístico de custo zero separa dúvidas de anúncios de manutenção. O Nó 2 valida tickets via Pydantic v2.</p>
+            <ul class="arch-points">
+              <li>Validação canônica com Pydantic v2</li>
+              <li>Proteção contra Prompt Injection</li>
+              <li>Mascaramento LGPD em logs</li>
+            </ul>
+          </div>
+
+          <div class="arch-card" style="border: 2px solid var(--navy);">
+            <div class="arch-badge-tech" style="background: var(--navy); color: var(--sand);">LangGraph Core</div>
+            <h3 class="arch-title">Resolvedor com Human-in-the-Loop</h3>
+            <p class="arch-desc">O Nó 3 opera como um StateGraph resiliente com checkpointer no PostgreSQL. Executa o <code>interrupt</code> para aguardar o anfitrião.</p>
+            <ul class="arch-points">
+              <li>Retomada assíncrona pós-aprovação</li>
+              <li>Loops de reproposição de agenda</li>
+              <li>Timeouts e escalonamento automático</li>
+            </ul>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-badge-tech">APScheduler + Places</div>
+            <h3 class="arch-title">Prospecção Ativa Contínua (Nó S)</h3>
+            <p class="arch-desc">Um agente em background prospecta prestadores no Google Places API, testa o WhatsApp e armazena os contatos confirmados.</p>
+            <ul class="arch-points">
+              <li>Pool pré-qualificado por região</li>
+              <li>Disparo programado ou sob demanda</li>
+              <li>Observabilidade total via Langfuse</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 7: MERCADO E MODELO DE NEGÓCIO -->
+      <section class="slide" data-index="7">
+        <div class="slide-header">
+          <div class="slide-title-group">
+            <span class="badge badge-amber">Viabilidade & Negócio</span>
+            <h2 class="slide-title">Mercado Imobiliário Aquecido e Modelo B2B SaaS</h2>
+            <p class="slide-subtitle">Uma solução escalável para um dos setores mais rentáveis do turismo.</p>
+          </div>
+        </div>
+
+        <div class="market-grid">
+          <div class="stat-cards-column">
+            <div class="stat-card-big">
+              <span class="stat-number">450.000+</span>
+              <span class="stat-desc">Imóveis de temporada ativos no Brasil no Airbnb e Booking.</span>
+            </div>
+            <div class="stat-card-big">
+              <span class="stat-number">R$ 5,2 Bi</span>
+              <span class="stat-desc">Volume transacionado anualmente pelo ecossistema de aluguel flexível no país.</span>
+            </div>
+          </div>
+
+          <div class="business-model-box">
+            <h3 style="font-size: 24px; font-weight: 800; letter-spacing: -0.01em;">Modelo de Monetização Previsível</h3>
+            
+            <div class="bm-row">
+              <div class="bm-icon">🏢</div>
+              <div class="bm-text">
+                <span class="bm-title">SaaS por Imóvel Ativo</span>
+                <span class="bm-desc">R$ 49,00 / mês por imóvel cadastrado. Inclui atendimento inteligente 24/7, roteador e rede de prestadores.</span>
+              </div>
+            </div>
+
+            <div class="bm-row">
+              <div class="bm-icon">⚡</div>
+              <div class="bm-text">
+                <span class="bm-title">Taxa de Sucesso por OS Resolvida</span>
+                <span class="bm-desc">R$ 15,00 por incidente resolvido ponta a ponta. Alinha o ganho do Zelo com o sucesso do gestor.</span>
+              </div>
+            </div>
+
+            <div class="bm-row">
+              <div class="bm-icon">📈</div>
+              <div class="bm-text">
+                <span class="bm-title">LTV / CAC Excepcional</span>
+                <span class="bm-desc">Churn quase nulo: anfitrião que evita 1 review negativa nunca desinstala a plataforma.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 8: CONCLUSÃO E DEMO CALL -->
+      <section class="slide" data-index="8">
+        <div class="closing-box">
+          <svg width="84" height="84" viewBox="0 0 72 72">
+            <rect width="72" height="72" rx="24" fill="#17323A"></rect>
+            <path d="M18 36 L36 21 L54 36" fill="none" stroke="#F6F3EE" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M25 33 V51 H47 V33" fill="none" stroke="#F6F3EE" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            <circle cx="36" cy="41.5" r="4.5" fill="#F2A541"></circle>
+          </svg>
+
+          <h2 class="closing-headline">
+            Cuidamos do seu imóvel para você cuidar do <span>seu negócio</span>.
+          </h2>
+
+          <p class="closing-sub">
+            O Zelo devolve o sono do superhost e transforma a manutenção de imóveis em uma experiência cinco estrelas.
+          </p>
+
+          <a href="#" id="startLiveDemoBtn" class="btn-live-demo">
+            <span>Iniciar Demonstração ao Vivo</span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+
+          <div class="team-badge">
+            <span>Zelo · SmartRepair AI</span>
+            <span>•</span>
+            <span>Converge AI Hackathon 2026</span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script>
+    // Slide Navigation Logic
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentIndex = 0;
+
+    const progressBar = document.getElementById('progressBar');
+    const slideCounter = document.getElementById('slideCounter');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+    function updateSlides(newIndex) {
+      if (newIndex < 0 || newIndex >= totalSlides) return;
+
+      slides.forEach((slide, i) => {
+        slide.classList.remove('active', 'prev');
+        if (i < newIndex) {
+          slide.classList.add('prev');
+        } else if (i === newIndex) {
+          slide.classList.add('active');
+        }
+      });
+
+      currentIndex = newIndex;
+
+      // Update counter and progress
+      const currentFormatted = String(currentIndex + 1).padStart(2, '0');
+      const totalFormatted = String(totalSlides).padStart(2, '0');
+      slideCounter.textContent = `${currentFormatted} / ${totalFormatted}`;
+      progressBar.style.width = `${((currentIndex + 1) / totalSlides) * 100}%`;
+    }
+
+    function nextSlide() {
+      if (currentIndex < totalSlides - 1) {
+        updateSlides(currentIndex + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentIndex > 0) {
+        updateSlides(currentIndex - 1);
+      }
+    }
+
+    // Keyboard controls
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        updateSlides(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        updateSlides(totalSlides - 1);
+      }
+    });
+
+    nextBtn.addEventListener('click', nextSlide);
+    prevBtn.addEventListener('click', prevSlide);
+
+    // Fullscreen Toggle
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error(err);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+    // Presenter Timer (Counts mm:ss)
+    let secondsElapsed = 0;
+    const timerEl = document.getElementById('pitchTimer');
+    setInterval(() => {
+      secondsElapsed++;
+      const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+      const secs = String(secondsElapsed % 60).padStart(2, '0');
+      timerEl.textContent = `${mins}:${secs}`;
+    }, 1000);
+
+    // Initial State
+    updateSlides(0);
+  </script>
+</body>
+</html>
