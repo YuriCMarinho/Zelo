@@ -12,10 +12,6 @@ export interface AgentNode {
   y: number
   radius: number
   description: string
-  ioContract: {
-    input: string
-    output: string
-  }
   modelName: string
   phaseNumber?: string
   defaultStatus: 'idle' | 'running' | 'waiting' | 'success'
@@ -77,7 +73,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState<string>('all')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-3-adm')
   const [copiedTrace, setCopiedTrace] = useState(false)
-  const [isGuideOpen, setIsGuideOpen] = useState(true)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   const propList = useMemo(() => propertiesList.slice(0, 4), [propertiesList])
 
@@ -94,11 +90,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         y: 115,
         radius: 28,
         description:
-          'Imóvel com chamado elétrico em andamento (chuveiro da suíte). O hóspede relatou no chat único e o fluxo aguarda decisão do anfitrião.',
-        ioContract: {
-          input: 'Mensagem do hóspede ou camareira',
-          output: 'Evento autenticado com property_id',
-        },
+          'Chamado elétrico em andamento (chuveiro). Orçamentos aguardam aprovação do anfitrião.',
         modelName: 'Canal Único do Imóvel',
         defaultStatus: 'waiting',
         langfuse: {
@@ -121,11 +113,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         y: 230,
         radius: 28,
         description:
-          'Loft urbano com reservas confirmadas e atendimento comercial automatizado para dúvidas de check-in.',
-        ioContract: {
-          input: 'Dúvida sobre estadia ou manutenção',
-          output: 'Sessão vinculada ao Loft Jardim',
-        },
+          'Loft urbano com reservas confirmadas e triagem de dúvidas ativas no Nó 1.',
         modelName: 'Canal Único do Imóvel',
         defaultStatus: 'idle',
         langfuse: {
@@ -148,11 +136,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         y: 345,
         radius: 28,
         description:
-          'Imóvel de temporada à beira-mar com agenda ativa e monitoramento contínuo de solicitações.',
-        ioContract: {
-          input: 'Mensagem no chat do imóvel',
-          output: 'Sessão vinculada à Vila Areia',
-        },
+          'Imóvel à beira-mar com agenda ativa. Nenhum chamado pendente no momento.',
         modelName: 'Canal Único do Imóvel',
         defaultStatus: 'idle',
         langfuse: {
@@ -175,11 +159,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         y: 460,
         radius: 28,
         description:
-          'Studio no Recife Antigo voltado a estadias de trabalho remoto, com respostas rápidas sobre conectividade e acesso.',
-        ioContract: {
-          input: 'Pergunta de hóspede ou relato técnico',
-          output: 'Sessão vinculada ao Studio Tech',
-        },
+          'Studio no polo de inovação do Recife. Atendimento automático a dúvidas de check-in.',
         modelName: 'Canal Único do Imóvel',
         defaultStatus: 'idle',
         langfuse: {
@@ -204,11 +184,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 32,
         phaseNumber: 'R',
         description:
-          'Filtra tentativas de prompt injection e classifica se a mensagem é uma dúvida comercial (Fluxo A) ou um problema de manutenção (Fluxo C).',
-        ioContract: {
-          input: 'Texto sanitizado + perfil do remetente',
-          output: 'Rota determinística: Nó 1 ou Nó 2',
-        },
+          'Protege contra injection e direciona para atendimento comercial (Nó 1) ou manutenção (Nó 2).',
         modelName: 'Qwen/Qwen3.5-4B (Featherless)',
         defaultStatus: 'success',
         langfuse: {
@@ -231,11 +207,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 28,
         phaseNumber: 'S',
         description:
-          'Job periódico assíncrono que busca prestadores por região, valida disponibilidade de atendimento e grava no banco apenas profissionais confirmados.',
-        ioContract: {
-          input: 'Categoria + cidade do imóvel',
-          output: 'Prestadores validados no PostgreSQL',
-        },
+          'Job assíncrono que descobre e valida prestadores locais antes de gravar no banco.',
         modelName: 'APScheduler + Qwen3.5-4B',
         defaultStatus: 'success',
         langfuse: {
@@ -260,11 +232,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 30,
         phaseNumber: '1',
         description:
-          'Responde dúvidas sobre regras, comodidades e disponibilidade do imóvel de forma acolhedora até a confirmação da reserva.',
-        ioContract: {
-          input: 'Pergunta do potencial hóspede + FAQ do imóvel',
-          output: 'Resposta contextualizada + registro de reserva',
-        },
+          'Conversa calorosa com potenciais hóspedes até a confirmação da reserva.',
         modelName: 'Qwen/Qwen3.5-9B (Featherless)',
         defaultStatus: 'success',
         langfuse: {
@@ -287,11 +255,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 30,
         phaseNumber: '2',
         description:
-          'Extrai categoria técnica, urgência e cômodo afetado a partir do relato do hóspede ou camareira, gerando o chamado estruturado.',
-        ioContract: {
-          input: 'Relato de problema no imóvel',
-          output: 'Ticket estruturado (Pydantic v2)',
-        },
+          'Classifica categoria, urgência e cômodo do chamado em schema Pydantic v2.',
         modelName: 'Qwen/Qwen3.5-4B (Featherless)',
         defaultStatus: 'success',
         langfuse: {
@@ -316,11 +280,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 28,
         phaseNumber: '3.1',
         description:
-          'Aciona até 3 prestadores validados da categoria na região do imóvel e aguarda os orçamentos com controle de timeout.',
-        ioContract: {
-          input: 'Ticket aberto + prestadores homologados',
-          output: 'Lista de orçamentos com preço e prazo',
-        },
+          'Consulta prestadores homologados e reúne orçamentos com controle de timeout.',
         modelName: 'LangGraph + Template Determinístico',
         defaultStatus: 'success',
         langfuse: {
@@ -343,11 +303,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 32,
         phaseNumber: '3.2',
         description:
-          'Sintetiza os orçamentos recebidos e pausa o grafo (interrupt) até que o anfitrião aprove explicitamente o prestador.',
-        ioContract: {
-          input: 'Orçamentos comparados (preço, nota, janela)',
-          output: 'Prestador aprovado pelo anfitrião',
-        },
+          'Apresenta comparativo ao anfitrião e pausa a execução até a aprovação explícita.',
         modelName: 'Qwen/Qwen3.5-9B (Featherless)',
         defaultStatus: 'waiting',
         langfuse: {
@@ -370,11 +326,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 28,
         phaseNumber: '3.3',
         description:
-          'Cruza a urgência do reparo com o calendário de ocupação: chamados urgentes priorizam a primeira janela; normais priorizam dias livres.',
-        ioContract: {
-          input: 'Urgência do ticket + calendário de reservas',
-          output: 'Proposta de data enviada ao prestador',
-        },
+          'Cruza urgência e calendário: urgente o quanto antes; normal prefere dias sem hóspede.',
         modelName: 'Regra Determinística (Zero Tokens)',
         defaultStatus: 'idle',
         langfuse: {
@@ -397,11 +349,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 28,
         phaseNumber: '3.4',
         description:
-          'Valida o aceite do prestador para a data proposta. Se recusar, retorna ao passo 3.3 para ofertar a próxima janela disponível.',
-        ioContract: {
-          input: 'Resposta do prestador sobre a data',
-          output: 'Data confirmada ou recálculo de janela',
-        },
+          'Aguarda aceite do prestador. Se recusar, oferta automaticamente a próxima janela.',
         modelName: 'Guardrail Determinístico + 4B',
         defaultStatus: 'idle',
         langfuse: {
@@ -424,11 +372,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         radius: 28,
         phaseNumber: '3.5',
         description:
-          'Notifica o hóspede caso esteja no imóvel na data agendada, bloqueia a janela no calendário e encerra o chamado com trilha auditável.',
-        ioContract: {
-          input: 'Agendamento confirmado',
-          output: 'Aviso enviado no chat + Ticket RESOLVED',
-        },
+          'Avisa hóspede se hospedado na data, registra na agenda e fecha o ticket.',
         modelName: 'Qwen/Qwen3.5-4B (Featherless)',
         defaultStatus: 'idle',
         langfuse: {
@@ -820,19 +764,8 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
           </div>
 
           <div className="drawer-content">
-            {/* Explicação direta + Contrato de Entrada/Saída */}
             <div className="drawer-section">
               <p className="drawer-description">{activeNode.description}</p>
-              <dl className="io-contract-list">
-                <div>
-                  <dt>Entrada</dt>
-                  <dd>{activeNode.ioContract.input}</dd>
-                </div>
-                <div>
-                  <dt>Saída</dt>
-                  <dd>{activeNode.ioContract.output}</dd>
-                </div>
-              </dl>
             </div>
 
             {/* Telemetria Langfuse limpa e tabular */}

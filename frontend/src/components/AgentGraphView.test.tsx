@@ -50,19 +50,19 @@ describe('AgentGraphView Component', () => {
     expect(screen.getByText('run-demo-001')).toBeInTheDocument()
   })
 
-  it('permite recolher e expandir o guia de observabilidade Langfuse', async () => {
+  it('permite expandir e recolher o guia de observabilidade Langfuse', async () => {
     const user = userEvent.setup()
     render(<AgentGraphView navigate={() => {}} propertiesList={[...properties]} />)
 
-    expect(screen.getByText(/Como funciona a Observabilidade com Langfuse nesta aplicação/)).toBeInTheDocument()
-    expect(screen.getByText('1. Traces & Spans')).toBeInTheDocument()
-
     const toggleBtn = screen.getByRole('button', { name: /Como funciona a Observabilidade/ })
-    await user.click(toggleBtn)
+    expect(toggleBtn).toBeInTheDocument()
     expect(screen.queryByText('1. Traces & Spans')).not.toBeInTheDocument()
 
     await user.click(toggleBtn)
     expect(screen.getByText('1. Traces & Spans')).toBeInTheDocument()
+
+    await user.click(toggleBtn)
+    expect(screen.queryByText('1. Traces & Spans')).not.toBeInTheDocument()
   })
 })
 

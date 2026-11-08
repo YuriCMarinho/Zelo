@@ -34,77 +34,104 @@ export function AuditPanel() {
     }
   }, [])
 
+  const budgetLimit = costs?.budget_limit_usd ?? 25
+  const percentage = costs?.percentage_used ?? 0
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-      {/* Bloco de Orçamento e Custos */}
-      <section className="timeline-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Resumo de Consumo de Orçamento */}
+      <section className="timeline-card" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
-            <span className="eyebrow">AUDITORIA DE CUSTOS · LEDGER REAL</span>
-            <h2 style={{ margin: '4px 0 0', fontSize: '24px' }}>Consumo do Orçamento Featherless</h2>
+            <h2 style={{ margin: 0, fontSize: '20px', letterSpacing: '-0.02em' }}>Consumo do Orçamento Featherless</h2>
+            <span style={{ fontSize: '13px', color: 'var(--mar-72)' }}>
+              Teto global: US$ {budgetLimit.toFixed(2)} · Telemetria em tempo real
+            </span>
           </div>
           <button
             type="button"
             className="card-btn"
-            style={{ background: 'var(--mar-08)', color: 'var(--mar-profundo)' }}
+            style={{ background: 'var(--mar-08)', color: 'var(--mar-profundo)', padding: '8px 16px', borderRadius: '10px' }}
             onClick={loadData}
             disabled={loading}
           >
-            {loading ? 'Atualizando...' : 'Atualizar Dados'}
+            {loading ? 'Atualizando...' : 'Atualizar'}
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-          <div style={{ padding: '16px', background: 'var(--areia)', borderRadius: '14px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--mar-72)' }}>Total Gasto (US$)</span>
-            <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '4px' }} className="tabular-nums">
+        {/* Barra de Progresso do Orçamento */}
+        <div style={{ marginBottom: '24px' }}>
+          <div
+            style={{
+              height: '8px',
+              width: '100%',
+              background: 'var(--mar-08)',
+              borderRadius: '999px',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.min(Math.max(percentage, 1), 100)}%`,
+                background: percentage > 70 ? '#D9534F' : 'var(--ambar)',
+                borderRadius: '999px',
+                transition: 'width 0.4s ease',
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+          <div style={{ padding: '16px', background: 'var(--areia)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--mar-72)' }}>Gasto Total</span>
+            <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '2px' }} className="tabular-nums">
               {usd(costs?.total_cost_usd)}
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
-              Teto global: US$ {costs?.budget_limit_usd?.toFixed(2) ?? '25.00'}
+            <span style={{ fontSize: '11.5px', color: 'var(--mar-72)' }}>
+              Saldo restante: {usd(budgetLimit - (costs?.total_cost_usd ?? 0))}
             </span>
           </div>
 
-          <div style={{ padding: '16px', background: 'var(--areia)', borderRadius: '14px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--mar-72)' }}>Chamadas de Inferência</span>
-            <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '4px' }} className="tabular-nums">
+          <div style={{ padding: '16px', background: 'var(--areia)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--mar-72)' }}>Chamadas LLM</span>
+            <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '2px' }} className="tabular-nums">
               {costs?.total_calls ?? 0}
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
-              {costs?.total_input_tokens ?? 0} in · {costs?.total_output_tokens ?? 0} out tokens
+            <span style={{ fontSize: '11.5px', color: 'var(--mar-72)' }} className="tabular-nums">
+              {costs?.total_input_tokens?.toLocaleString('pt-BR') ?? 0} in · {costs?.total_output_tokens?.toLocaleString('pt-BR') ?? 0} out
             </span>
           </div>
 
-          <div style={{ padding: '16px', background: 'var(--areia)', borderRadius: '14px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--mar-72)' }}>Uso do Limite Global</span>
-            <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '4px', color: 'var(--mar-profundo)' }}>
-              {costs?.percentage_used?.toFixed(2) ?? '0.00'}%
+          <div style={{ padding: '16px', background: 'var(--areia)', borderRadius: '12px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--mar-72)' }}>Uso da Cota</span>
+            <div style={{ fontSize: '22px', fontWeight: 700, marginTop: '2px' }} className="tabular-nums">
+              {percentage.toFixed(2)}%
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
-              Reserva de 30% garantida para S3
+            <span style={{ fontSize: '11.5px', color: 'var(--mar-72)' }}>
+              Limite seguro mantido
             </span>
           </div>
         </div>
 
-        {/* Detalhamento por Nó */}
+        {/* Detalhamento por Nó minimalista */}
         {costs?.by_node && Object.keys(costs.by_node).length > 0 && (
-          <div>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--mar-72)' }}>
-              DISTRIBUIÇÃO DE CUSTO POR NÓ (US$)
-            </span>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px' }}>
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--mar-08)' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {Object.entries(costs.by_node).map(([node, cost]) => (
                 <span
                   key={node}
+                  className="tabular-nums"
                   style={{
-                    padding: '6px 12px',
+                    padding: '5px 12px',
                     borderRadius: '8px',
-                    background: 'var(--mar-08)',
+                    background: 'var(--areia)',
+                    border: '1px solid var(--mar-16)',
                     fontSize: '12px',
-                    fontWeight: 600,
+                    color: 'var(--mar-profundo)',
                   }}
                 >
-                  {node}: {usd(cost)}
+                  <strong style={{ fontWeight: 600 }}>{node}:</strong> {usd(cost)}
                 </span>
               ))}
             </div>
@@ -112,44 +139,60 @@ export function AuditPanel() {
         )}
       </section>
 
-      {/* Trilha de Auditoria */}
-      <section className="timeline-card">
-        <div>
-          <span className="eyebrow">RASTREABILIDADE COMPLETA · LGPD COMPLIANT</span>
-          <h2 style={{ margin: '4px 0 0', fontSize: '24px' }}>Eventos de Auditoria Recentes</h2>
-          <p style={{ margin: '4px 0 16px', fontSize: '13px', color: 'var(--mar-72)' }}>
-            Todos os eventos de recebimento de mensagem, criação de chamado, cotação e aprovação do ADM.
-          </p>
+      {/* Trilha de Eventos Minimalista */}
+      <section className="timeline-card" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ margin: 0, fontSize: '18px', letterSpacing: '-0.02em' }}>Eventos Recentes</h3>
+          <span className="tabular-nums" style={{ fontSize: '12px', color: 'var(--mar-72)' }}>
+            {events.length} registrado(s)
+          </span>
         </div>
 
         <div className="audit-list">
           {events.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px', color: 'var(--mar-72)', fontSize: '13px' }}>
-              Nenhum evento registrado ainda. Envie uma mensagem pelo chat ou use o simulador para gerar ações.
+            <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--mar-72)', fontSize: '13px' }}>
+              Nenhum evento registrado ainda. As mensagens e aprovações aparecerão aqui.
             </div>
           ) : (
             events.map((ev) => (
-              <div key={ev.id} className="audit-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="audit-node">{ev.node}</span>
-                    <strong>{ev.event_type}</strong>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: 'var(--mar-72)' }}>
-                    <span>{ev.ticket_id ? `#${ev.ticket_id.slice(0, 8)}` : ev.run_id.slice(0, 12)}</span>
-                    <time>{new Date(ev.created_at).toLocaleTimeString('pt-BR')}</time>
-                  </div>
+              <div
+                key={ev.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 14px',
+                  background: 'var(--areia)',
+                  borderRadius: '10px',
+                  border: '1px solid var(--mar-08)',
+                  fontSize: '13px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: 'var(--branco)',
+                      border: '1px solid var(--mar-16)',
+                      color: 'var(--mar-profundo)',
+                    }}
+                  >
+                    {ev.node}
+                  </span>
+                  <strong>{ev.event_type}</strong>
                 </div>
-                {ev.payload && Object.keys(ev.payload).length > 0 && (
-                  <details style={{ marginTop: '6px', fontSize: '12px' }}>
-                    <summary style={{ cursor: 'pointer', color: 'var(--mar-profundo)', fontWeight: 600 }}>
-                      Ver dados da operação ({Object.keys(ev.payload).join(', ')})
-                    </summary>
-                    <pre style={{ margin: '6px 0 0', padding: '8px 12px', background: 'var(--areia)', borderRadius: '8px', fontSize: '11px', overflowX: 'auto', border: '1px solid var(--mar-08)' }}>
-                      {JSON.stringify(ev.payload, null, 2)}
-                    </pre>
-                  </details>
-                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--mar-72)', fontSize: '12px' }} className="tabular-nums">
+                  {ev.ticket_id && (
+                    <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>
+                      #{ev.ticket_id.slice(0, 8)}
+                    </span>
+                  )}
+                  <time>{new Date(ev.created_at).toLocaleTimeString('pt-BR')}</time>
+                </div>
               </div>
             ))
           )}
