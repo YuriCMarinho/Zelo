@@ -70,24 +70,27 @@ export function ChatPanel({
       if (!active || !history.length) return
       const normalizeText = (s: string) => s.replace(/\s+/g, ' ').trim()
       for (const item of history) {
+        if (item.property_id !== property.id || item.channel !== activeChannel) continue
+        if (!['agent', 'hospede', 'camareira', 'anfitriao'].includes(item.sender)) continue
         if (seenRemoteIdsRef.current.has(item.id)) continue
         const normItemBody = normalizeText(item.body)
         const alreadyInLocal = messages.some(
           (m) =>
             m.id === item.id ||
-            (m.propertyId === property.id && normalizeText(m.body) === normItemBody) ||
+            (m.propertyId === property.id && m.sender === item.sender &&
+              m.channel === activeChannel && normalizeText(m.body) === normItemBody) ||
             (Boolean(item.booking_id) &&
               m.bookingId === item.booking_id &&
               m.sender === 'agent' &&
               normalizeText(m.body).slice(0, 24) === normItemBody.slice(0, 24)),
         )
         seenRemoteIdsRef.current.add(item.id)
-        if (!alreadyInLocal && item.sender === 'agent') {
+        if (!alreadyInLocal) {
           onNewMessage({
             id: item.id,
             propertyId: property.id,
             channel: item.channel === 'cleaner' ? 'cleaner' : 'guest',
-            sender: 'agent',
+            sender: item.sender as ChatMessage['sender'],
             body: item.body,
             time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(
               new Date(item.created_at),
