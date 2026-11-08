@@ -1,5 +1,12 @@
 import os
+import sys
 from collections.abc import Generator
+from pathlib import Path
+
+# Garante que o diretório backend esteja no sys.path mesmo ao rodar caminhos relativos
+backend_dir = Path(__file__).resolve().parent.parent / "backend"
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 # Configura banco em memória antes de qualquer importação de app/engine
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -12,7 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.db.base import Base  # noqa: E402
-from app.db.session import engine, get_db  # noqa: E402
+from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
 test_engine = create_engine(
@@ -21,6 +28,14 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def bind_test_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configura o engine e SessionLocal de teste de forma isolada via monkeypatch."""
+    monkeypatch.setattr("app.db.session.engine", test_engine)
+    monkeypatch.setattr("app.db.session.SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr("app.agents.resolver_graph.SessionLocal", TestingSessionLocal)
 
 
 @pytest.fixture(scope="function")
@@ -37,14 +52,13 @@ def db_session() -> Generator[Session, None, None]:
 @pytest.fixture(scope="function")
 def client(db_session: Session) -> Generator[TestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
+        session = TestingSessionLocal()
         try:
-            yield db_session
+            yield session
         finally:
-            pass
+            session.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    # Cria tabelas no engine de app se for sqlite in-memory
-    Base.metadata.create_all(bind=engine)
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
