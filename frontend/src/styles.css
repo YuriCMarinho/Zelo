@@ -1071,65 +1071,44 @@ h1, h2, h3, h4, .font-title {
 .guide-items {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .guide-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
   font-size: 13px;
 }
 
-.guide-icon {
-  font-size: 16px;
-  line-height: 1.2;
-  flex-shrink: 0;
+.guide-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.guide-item strong {
-  display: block;
-  font-size: 13px;
-  color: var(--mar-profundo);
-  margin-bottom: 2px;
-}
-
-.guide-item p {
-  margin: 0;
+.guide-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--mar-72);
-  line-height: 1.4;
 }
 
-.guide-item code {
-  background: var(--areia);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: inherit;
-  font-weight: 600;
+.guide-value {
+  margin: 0;
+  font-size: 13px;
   color: var(--mar-profundo);
+  line-height: 1.45;
 }
 
 .guide-footer-tip {
-  margin-top: 16px;
+  margin-top: 14px;
   padding: 12px 14px;
   background: var(--mar-08);
   border-radius: 12px;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  color: var(--mar-profundo);
-}
-
-.guide-footer-tip span {
-  color: var(--ambar);
-  font-size: 14px;
-  line-height: 1;
-}
-
-.guide-footer-tip small {
+  color: var(--mar-72);
   font-size: 12px;
   line-height: 1.45;
-  color: var(--mar-72);
 }
 
 .active-ticket-mini-card {
@@ -1172,19 +1151,22 @@ h1, h2, h3, h4, .font-title {
 .adm-guarantees-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .guarantee-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   font-size: 13px;
 }
 
-.guarantee-icon {
-  font-size: 16px;
-  line-height: 1.2;
+.guarantee-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ambar);
+  margin-top: 6px;
   flex-shrink: 0;
 }
 
@@ -1199,39 +1181,6 @@ h1, h2, h3, h4, .font-title {
   margin: 0;
   color: var(--mar-72);
   line-height: 1.4;
-}
-
-/* Accordion for Dev and Simulation Tools */
-.dev-tools-accordion {
-  margin-top: 6px;
-  background: rgba(23, 50, 58, 0.02);
-  border: 1px dashed var(--mar-16);
-  border-radius: 16px;
-  padding: 12px 16px;
-  font-size: 13px;
-  color: var(--mar-72);
-  transition: all 0.2s ease;
-}
-
-.dev-tools-accordion summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--mar-profundo);
-  user-select: none;
-  outline: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.dev-tools-accordion summary:hover {
-  color: var(--ambar);
-}
-
-.dev-tools-accordion[open] {
-  background: var(--branco);
-  border-style: solid;
-  box-shadow: 0 4px 20px rgba(23, 50, 58, 0.03);
 }
 
 /* Footer */

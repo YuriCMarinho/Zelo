@@ -92,21 +92,16 @@ describe('navegação por imóvel', () => {
     expect(screen.getByText(/Teto global: US\$/)).toBeInTheDocument()
   })
 
-  it('exibe a máquina de estados com os 5 passos do Fluxo C', async () => {
+  it('exibe o guia minimalista do imóvel no chat e não renderiza ferramentas de teste removidas', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
     await user.click(screen.getByRole('link', { name: 'Chat do imóvel' }))
 
-    expect(screen.getByText(/1\. Coleta de Orçamentos/)).toBeInTheDocument()
-    expect(screen.getByText(/2\. Decisão do Anfitrião/)).toBeInTheDocument()
-    expect(screen.getByText(/3\. Regra Urgência × Agenda/)).toBeInTheDocument()
-    expect(screen.getByText(/4\. Confirmação do Prestador/)).toBeInTheDocument()
-    expect(screen.getByText(/5\. Aviso ao Hóspede e Conclusão/)).toBeInTheDocument()
-
-    // Simulador de cenários presente
-    expect(screen.getByText('Simulador de Cenários dos Agentes')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Relato de Manutenção/ })).toBeInTheDocument()
+    expect(screen.getByText('Wi-Fi da acomodação')).toBeInTheDocument()
+    expect(screen.getByText('Horários de estadia')).toBeInTheDocument()
+    expect(screen.queryByText('Simulador de Cenários dos Agentes')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Ciclo do Chamado/)).not.toBeInTheDocument()
   })
 
   it('abre e fecha o modal de reset de demonstração para avaliadores', async () => {

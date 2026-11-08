@@ -3,9 +3,7 @@ import { approveQuote, fetchQuotes, fetchTicketsForProperty } from '../api/clien
 import { formatFriendlyDate, type ChatMessage, type MaintenanceTicket, type Property, type PropertyTab, type Quote } from '../contracts'
 import { propertyUrl } from '../routes'
 import { ChatPanel } from './ChatPanel'
-import { ProviderSimulator } from './ProviderSimulator'
 import { QuotesComparison } from './QuotesComparison'
-import { StateTimeline } from './StateTimeline'
 
 export function PropertyWorkspace({
   property,
@@ -165,11 +163,12 @@ export function PropertyWorkspace({
             scheduledVisit={scheduledDate ? formatFriendlyDate(scheduledDate) : null}
           />
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* 1. Guia rápido do imóvel com informações essenciais da estadia */}
+            {/* 1. Guia minimalista do imóvel com informações essenciais da estadia (sem emojis) */}
             <div className="property-guide-card">
               <div className="property-guide-header">
                 <img src={property.image} alt={property.title} className="property-guide-thumb" />
                 <div>
+                  <span className="eyebrow" style={{ fontSize: '10px' }}>GUIA DO IMÓVEL</span>
                   <h3>{property.title}</h3>
                   <p>{property.neighborhood} · {property.location.split(',')[1]?.trim() || 'Brasil'}</p>
                 </div>
@@ -177,37 +176,37 @@ export function PropertyWorkspace({
 
               <div className="guide-items">
                 <div className="guide-item">
-                  <span className="guide-icon">📶</span>
-                  <div>
-                    <strong>Wi-Fi da acomodação</strong>
-                    <p>Rede: <code>{wifiSsid}</code> · Senha: <code>zelo@2026</code></p>
+                  <div className="guide-meta-col">
+                    <span className="guide-kicker">Wi-Fi da acomodação</span>
+                    <p className="guide-value">
+                      Rede <strong>{wifiSsid}</strong> · Senha <strong>zelo@2026</strong>
+                    </p>
                   </div>
                 </div>
                 <div className="guide-item">
-                  <span className="guide-icon">🔑</span>
-                  <div>
-                    <strong>Acesso inteligente</strong>
-                    <p>{isPortoDigital ? 'Fechadura digital com senha 24h' : 'Check-in flexível com anfitrião'}</p>
+                  <div className="guide-meta-col">
+                    <span className="guide-kicker">Acesso</span>
+                    <p className="guide-value">
+                      {isPortoDigital ? 'Fechadura digital com código autônomo 24h' : 'Check-in autônomo com anfitrião'}
+                    </p>
                   </div>
                 </div>
                 <div className="guide-item">
-                  <span className="guide-icon">🕒</span>
-                  <div>
-                    <strong>Horários</strong>
-                    <p>Check-in a partir das 14h · Check-out até 11h</p>
+                  <div className="guide-meta-col">
+                    <span className="guide-kicker">Horários de estadia</span>
+                    <p className="guide-value">Check-in a partir das 14h · Check-out até 11h</p>
                   </div>
                 </div>
               </div>
 
               <div className="guide-footer-tip">
-                <span>✦</span>
                 <small>
-                  Dúvidas comuns são respondidas pela IA no chat. Problemas no espaço geram chamados para o anfitrião aprovar.
+                  Dúvidas rotineiras são respondidas pela IA no chat. Problemas no imóvel geram chamados para o anfitrião aprovar.
                 </small>
               </div>
             </div>
 
-            {/* 2. Chamado Ativo do Imóvel (se houver) */}
+            {/* 2. Chamado Ativo do Imóvel (se houver, limpo e sem emojis) */}
             {ticket && (
               <div className="active-ticket-mini-card">
                 <div className="ticket-mini-top">
@@ -231,7 +230,7 @@ export function PropertyWorkspace({
                 <h4>{ticket.description}</h4>
                 {ticket.scheduled_date && (
                   <p className="ticket-date">
-                    🗓️ Visita: <strong>{formatFriendlyDate(ticket.scheduled_date)}</strong>
+                    Data da visita: <strong>{formatFriendlyDate(ticket.scheduled_date)}</strong>
                   </p>
                 )}
                 <div style={{ marginTop: '10px' }}>
@@ -250,24 +249,6 @@ export function PropertyWorkspace({
                 </div>
               </div>
             )}
-
-            {/* 3. Ferramentas de Teste e Simulação em accordion recolhível */}
-            <details className="dev-tools-accordion">
-              <summary>🛠️ Simulação e Máquina de Estados (Avaliadores)</summary>
-              <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <ProviderSimulator
-                  property={property}
-                  currentTicketId={ticket?.id}
-                  ticketStatus={ticket?.status}
-                  onTicketUpdated={loadTicketData}
-                />
-                <StateTimeline
-                  status={ticket?.status || 'open'}
-                  scheduledDate={scheduledDate}
-                  notifyTenant={ticket?.notify_tenant}
-                />
-              </div>
-            </details>
           </aside>
         </div>
       )}
@@ -282,7 +263,7 @@ export function PropertyWorkspace({
             isLoading={loadingQuotes}
           />
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* 1. Painel de Controle e Garantias do Anfitrião */}
+            {/* 1. Painel de Controle e Garantias do Anfitrião (limpo, minimalista, sem emojis) */}
             <div className="adm-control-card">
               <span className="eyebrow">ÁREA DO ANFITRIÃO</span>
               <h3 style={{ margin: '4px 0 10px', fontSize: '18px' }}>Decisões com você</h3>
@@ -292,21 +273,21 @@ export function PropertyWorkspace({
 
               <div className="adm-guarantees-list">
                 <div className="guarantee-item">
-                  <span className="guarantee-icon">🛡️</span>
+                  <span className="guarantee-bullet" />
                   <div>
                     <strong>Você tem o controle</strong>
                     <p>Nenhum prestador é contratado sem seu clique e aprovação prévia.</p>
                   </div>
                 </div>
                 <div className="guarantee-item">
-                  <span className="guarantee-icon">⭐</span>
+                  <span className="guarantee-bullet" />
                   <div>
                     <strong>Prestadores homologados</strong>
                     <p>Profissionais validados na região com avaliação média comprovada.</p>
                   </div>
                 </div>
                 <div className="guarantee-item">
-                  <span className="guarantee-icon">🗓️</span>
+                  <span className="guarantee-bullet" />
                   <div>
                     <strong>Proteção de estadias</strong>
                     <p>A janela da visita é calculada para não coincidir com a rotina de hóspedes.</p>
@@ -335,24 +316,6 @@ export function PropertyWorkspace({
                 </a>
               </div>
             </div>
-
-            {/* 2. Ferramentas de Teste e Simulação em accordion recolhível */}
-            <details className="dev-tools-accordion">
-              <summary>🛠️ Simular Respostas de Prestadores (Demo)</summary>
-              <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <ProviderSimulator
-                  property={property}
-                  currentTicketId={ticket?.id}
-                  ticketStatus={ticket?.status}
-                  onTicketUpdated={loadTicketData}
-                />
-                <StateTimeline
-                  status={ticket?.status || 'awaiting_adm_approval'}
-                  scheduledDate={scheduledDate}
-                  notifyTenant={ticket?.notify_tenant}
-                />
-              </div>
-            </details>
           </aside>
         </div>
       )}
