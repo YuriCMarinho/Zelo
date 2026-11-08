@@ -48,3 +48,6 @@ mypy_path = "."
 testpaths = ["../tests", "tests"]
 pythonpath = ["."]
 addopts = "--cov=app --cov-report=term-missing --cov-fail-under=70 -W ignore::DeprecationWarning"
+markers = [
+    "real_llm: marca testes que efetuam chamadas reais pagas à API Featherless (executados apenas com -m real_llm)",
+]

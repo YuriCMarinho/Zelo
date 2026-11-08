@@ -84,6 +84,28 @@ async def process_chat_message(
         db=db,
     )
 
+    if ticket_id is not None:
+        try:
+            from app.agents.resolver_graph import (
+                LangGraphResolverStarter,
+                compiled_resolver_graph,
+            )
+            from app.schemas.resolver import ResolutionRequest
+
+            starter = LangGraphResolverStarter(compiled_resolver_graph)
+            req = ResolutionRequest(
+                ticket_id=ticket_id,
+                property_id=prop.id,
+                run_id=run_id,
+            )
+            await starter.astart_resolution(req, db=db)
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("smartrepair.chat").warning(
+                "Falha ao iniciar resolução automática do ticket %s: %s", ticket_id, exc
+            )
+
     suggested_actions = (
         ["Acompanhar chamado de manutenção", "Ver status do reparo"]
         if ticket_id is not None
