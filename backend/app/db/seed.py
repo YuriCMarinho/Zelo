@@ -217,7 +217,7 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                         "Vazamento contínuo no sifão da pia da cozinha, "
                         "escorrendo água para o armário."
                     ),
-                    status=TicketStatus.REQUESTING_QUOTES.value,
+                    status=TicketStatus.OPEN.value,
                     notify_tenant=True,
                 )
             )

@@ -84,22 +84,31 @@ export async function fetchQuotes(ticketId: string): Promise<Quote[]> {
 export async function approveQuote(
   ticketId: string,
   providerId: string,
+  runId?: string,
 ): Promise<MaintenanceTicket> {
   try {
     const res = await fetch(`${API_BASE}/tickets/${ticketId}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider_id: providerId }),
+      body: JSON.stringify({
+        provider_id: providerId,
+        run_id: runId || `run-approve-${Date.now()}`,
+      }),
     })
     if (res.ok) {
       return await res.json()
     }
-  } catch {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.detail ?? `Falha ao aprovar orçamento (HTTP ${res.status})`)
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes('Falha ao aprovar')) {
+      throw e
+    }
     // Modo offline / mock fallback para testes locais
   }
   return {
     id: ticketId,
-    run_id: `run-approved-${Date.now()}`,
+    run_id: runId || `run-approved-${Date.now()}`,
     property_id: 'casa-aurora',
     reported_by_role: 'tenant',
     category: 'eletricista',
@@ -122,7 +131,12 @@ export async function startTicketResolution(ticketId: string): Promise<Maintenan
     if (res.ok) {
       return await res.json()
     }
-  } catch {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.detail ?? `Falha ao iniciar resolução (HTTP ${res.status})`)
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes('Falha ao iniciar')) {
+      throw e
+    }
     // fallback
   }
   return {

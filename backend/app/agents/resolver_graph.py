@@ -396,7 +396,7 @@ async def synthesize_for_adm(state: ResolverState) -> dict[str, Any]:
             ticket_id,
             "synthesize_for_adm",
             "adm_notified",
-            {"synthesis": resp.content, "quotes": len(state["quotes"])},
+            {"synthesis": mask_pii(resp.content), "quotes": len(state["quotes"])},
         )
         db.commit()
 
