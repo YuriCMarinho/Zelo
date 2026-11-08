@@ -21,6 +21,43 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
   return <img className="zelo-logo" src={transparent ? '/zelo-logo-transparent.svg' : '/zelo-logo.svg'} width={size} height={size} alt="Zelo" />
 }
 
+function HeroWaveTexture() {
+  return (
+    <svg
+      className="hero-waves"
+      viewBox="0 0 700 360"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M 0 240 C 180 180 320 300 500 210 C 580 170 640 190 700 200"
+        stroke="rgba(246, 243, 238, 0.24)"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 0 200 C 180 140 320 260 500 170 C 580 130 640 150 700 160"
+        stroke="rgba(246, 243, 238, 0.18)"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 0 160 C 180 100 320 220 500 130 C 580 90 640 110 700 120"
+        stroke="rgba(246, 243, 238, 0.13)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 0 120 C 180 60 320 180 500 90 C 580 50 640 70 700 80"
+        stroke="rgba(246, 243, 238, 0.08)"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
@@ -162,9 +199,23 @@ function PropertyCard({ property, navigate }: { property: Property; navigate: (u
 function Listing({ navigate, propertiesList }: { navigate: (url: string) => void; propertiesList: Property[] }) {
   const [query, setQuery] = useState('')
   const filtered = propertiesList.filter((property) => `${property.title} ${property.location}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')))
-  return <main>
-    <section className="hero"><div className="hero-inner"><div><span className="eyebrow light">CUIDADO EM CADA DETALHE</span><h1>Seu imóvel bem cuidado.<br />Você no controle.</h1><p>Conversas, manutenção e decisões reunidas em um só lugar. A gente resolve; você aprova.</p><a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a></div><div className="hero-emblem" aria-hidden="true"><ZeloMark size={180} transparent /></div></div></section>
-    <section id="imoveis" className="listing-section page-width"><div className="section-heading"><div><span className="eyebrow">SEUS ESPAÇOS</span><h2>Meus imóveis</h2><p>Acompanhe cada estadia com tranquilidade.</p></div><label className="search-box"><span aria-hidden="true">⌕</span><span className="sr-only">Buscar imóvel</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar imóvel ou local" /></label></div>
+  return (
+    <main>
+      <section className="hero">
+        <div className="hero-inner">
+          <div>
+            <span className="eyebrow light">CUIDADO EM CADA DETALHE</span>
+            <h1>Seu imóvel bem cuidado.<br />Você no controle.</h1>
+            <p>Conversas, manutenção e decisões reunidas em um só lugar. A gente resolve; você aprova.</p>
+            <a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a>
+          </div>
+          <div className="hero-emblem" aria-hidden="true">
+            <HeroWaveTexture />
+            <ZeloMark size={180} transparent />
+          </div>
+        </div>
+      </section>
+      <section id="imoveis" className="listing-section page-width"><div className="section-heading"><div><span className="eyebrow">SEUS ESPAÇOS</span><h2>Meus imóveis</h2><p>Acompanhe cada estadia com tranquilidade.</p></div><label className="search-box"><span aria-hidden="true">⌕</span><span className="sr-only">Buscar imóvel</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar imóvel ou local" /></label></div>
       {filtered.length ? (
         <div className="property-grid">
           {filtered.map((property) => (
@@ -174,8 +225,9 @@ function Listing({ navigate, propertiesList }: { navigate: (url: string) => void
       ) : (
         <div className="empty-state">Nenhum imóvel encontrado para “{query}”.</div>
       )}
-    </section>
-  </main>
+      </section>
+    </main>
+  )
 }
 
 function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
