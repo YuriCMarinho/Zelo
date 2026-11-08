@@ -269,7 +269,7 @@ async def test_commercial_booking_creation_and_persistence(
 async def test_commercial_booking_with_br_dates_and_simulated_dates(
     db_session: Session, sample_property: Property
 ) -> None:
-    """Nó 1 extrai datas DD/MM/YYYY ou usa janela padrão quando datas não vêm no texto."""
+    """Nó 1 extrai datas e pede o intervalo quando ele não foi informado."""
     # Teste 1: formato DD/MM/YYYY
     d1 = (date.today() + timedelta(days=40)).strftime("%d/%m/%Y")
     d2 = (date.today() + timedelta(days=43)).strftime("%d/%m/%Y")
@@ -283,7 +283,7 @@ async def test_commercial_booking_with_br_dates_and_simulated_dates(
     )
     assert "aprovação do anfitrião" in out_br.response_text.lower()
 
-    # Teste 2: intenção sem datas explícitas (janela simulada padrão quando sem histórico)
+    # Sem datas explícitas, não cria solicitação nem inventa um período.
     msg_simulated = "Gostaria de fechar estadia e fazer a reserva agora mesmo."
     out_sim = await handle_commercial_message(
         prop=sample_property,
@@ -291,7 +291,28 @@ async def test_commercial_booking_with_br_dates_and_simulated_dates(
         run_id="run-comm-simulated-dates",
         db=db_session,
     )
-    assert "aprovação do anfitrião" in out_sim.response_text.lower()
+    assert out_sim.booking_id is None
+    assert "quais datas" in out_sim.response_text.lower()
+
+
+def test_booking_dates_are_required_in_first_chat_turn(client, sample_property, db_session):
+    payload = {"property_id": sample_property.id, "sender_role": "tenant", "session_id": "dates"}
+    first = client.post("/api/chat", json={**payload, "message": "Quero reservar"})
+    assert first.status_code == 200
+    assert first.json()["booking_id"] is None
+    assert db_session.query(Booking).count() == 0
+    second = client.post(
+        "/api/chat",
+        json={
+            **payload,
+            "message": "De 10/12/2027 até 13/12/2027",
+        },
+    )
+    assert second.status_code == 200
+    assert second.json()["booking_id"] is not None
+    booking = db_session.query(Booking).one()
+    assert booking.start_date == date(2027, 12, 10)
+    assert booking.end_date == date(2027, 12, 13)
 
 
 @pytest.mark.asyncio
