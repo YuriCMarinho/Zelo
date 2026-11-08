@@ -29,6 +29,7 @@ from app.db.seed import run_seed
 from app.db.session import engine, get_db
 from app.scheduler.provider_jobs import create_provider_scheduler
 from app.schemas.property import PropertyRead
+from app.services.frontend_files import frontend_file
 
 DatabaseDep = Annotated[Session, Depends(get_db)]
 
@@ -130,7 +131,4 @@ if static_dir and os.path.exists(os.path.join(static_dir, "index.html")):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_frontend_spa(full_path: str) -> FileResponse:
-        candidate = os.path.join(resolved_static_dir, full_path)
-        if full_path and os.path.isfile(candidate):
-            return FileResponse(candidate)
-        return FileResponse(os.path.join(resolved_static_dir, "index.html"))
+        return frontend_file(resolved_static_dir, full_path)
