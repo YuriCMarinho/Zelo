@@ -13,6 +13,11 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+FROM node:20-bookworm-slim AS browser-builder
+WORKDIR /opt/agent-browser
+COPY backend/browser/package*.json ./
+RUN npm ci --omit=dev
+
 # Estágio 2: Runtime Backend com Python 3.12 e uv
 FROM python:3.12-slim AS runtime
 WORKDIR /app
@@ -24,13 +29,20 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     ENVIRONMENT=production \
     FRONTEND_DIST_DIR=/app/frontend_dist \
-    PORT=8000
+    PORT=8000 \
+    AGENT_BROWSER_COMMAND=/opt/agent-browser/node_modules/.bin/agent-browser \
+    AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium \
+    AGENT_BROWSER_ARGS=--no-sandbox,--disable-dev-shm-usage
 
 # Dependências mínimas de sistema (curl para healthcheck)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    chromium \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=browser-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=browser-builder /opt/agent-browser /opt/agent-browser
 
 # Instalação das dependências Python
 COPY backend/pyproject.toml backend/uv.lock* ./backend/

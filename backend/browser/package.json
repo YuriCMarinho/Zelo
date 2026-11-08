@@ -1,0 +1,9 @@
+{
+  "name": "smartrepair-browser",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Vercel Agent Browser for provider discovery",
+  "dependencies": {
+    "agent-browser": "0.21.0"
+  }
+}

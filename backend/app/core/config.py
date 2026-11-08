@@ -21,7 +21,11 @@ class Settings(BaseSettings):
     max_cost_per_run_usd: float = 0.03
     max_cost_global_usd: float = 25.00
     google_places_api_key: str = ""
-    provider_source: str = "fixture"
+    provider_source: str = "agent_browser"
+    agent_browser_command: str = ""
+    agent_browser_executable_path: str = ""
+    browser_timeout_seconds: int = Field(default=35, ge=5, le=60)
+    max_browser_searches: int = Field(default=50, ge=1)
     provider_contact_allowlist: str = ""
     provider_simulated_replies: str = "{}"
     provider_collection_hours: int = 12
