@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://zelo-lu73.onrender.com/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://zelo-lu73.onrender.com/health"
+    },
+    {
+      "source": "/health/db",
+      "destination": "https://zelo-lu73.onrender.com/health/db"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
