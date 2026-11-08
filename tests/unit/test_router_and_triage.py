@@ -363,6 +363,41 @@ async def test_commercial_booking_date_conflict(
 # ==============================================================================
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Finalizei a limpeza da cozinha, está tudo certo.",
+        "A torneira da cozinha está funcionando normalmente.",
+        "Vistoria no banheiro sem problemas ou defeitos.",
+    ],
+)
+def test_cleaner_updates_without_incident_do_not_create_ticket(client, sample_property, message):
+    response = client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "message": message,
+            "sender_role": "cleaner",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["ticket_id"] is None
+    assert response.json()["suggested_actions"] == []
+
+
+def test_cleaner_completed_cleaning_does_not_hide_a_real_problem(client, sample_property):
+    response = client.post(
+        "/api/chat",
+        json={
+            "property_id": sample_property.id,
+            "sender_role": "cleaner",
+            "message": "Finalizei a limpeza da cozinha, mas a torneira está vazando.",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["ticket_id"] is not None
+
+
 @pytest.mark.asyncio
 async def test_validator_vague_report_requests_clarification(
     db_session: Session, sample_property: Property

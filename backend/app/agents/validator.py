@@ -233,6 +233,29 @@ def maintenance_social_reply(message: str) -> str | None:
     return None
 
 
+def has_maintenance_report(message: str) -> bool:
+    """Exige relato de falha ou pedido de serviço; mencionar cômodo não basta."""
+    text = message.casefold()
+    text = re.sub(
+        r"\b(?:sem|nenhum|nenhuma|não há|nao ha|não tem|nao tem)\s+"
+        r"(?:problemas?|defeitos?|vazamentos?|avarias?)"
+        r"(?:\s+(?:ou|e)\s+(?:problemas?|defeitos?|vazamentos?|avarias?))*\b",
+        "",
+        text,
+    )
+    return bool(
+        re.search(
+            r"vaz(?:a|ou|amento)|quebrad|quebrou|queimou|queimad|estrag|defeito|problema|"
+            r"infiltra|entupid|mofo|descasc|jorrando|faísca|faisca|choque|curto|"
+            r"trincad|rachad|danific|avaria|alagad|barulho|não gela|nao gela|"
+            r"não funciona|nao funciona|parou de|não acende|nao acende|água fria|agua fria|"
+            r"sem (?:luz|energia|água|agua)|cheiro de gás|cheiro de gas|emperrad|"
+            r"precis[oa]|ajuda|solicito|solicitar|consert|reparar|reparo|manutenção|manutencao",
+            text,
+        )
+    )
+
+
 async def handle_maintenance_message(
     prop: Property,
     message: str,
@@ -266,6 +289,12 @@ async def handle_maintenance_message(
             effective_message = f"{prev_user.strip()} - {effective_message}"
 
     text_lower = effective_message.lower()
+
+    if not has_maintenance_report(effective_message):
+        return (
+            "Obrigado pela atualização! Se precisar de ajuda com o imóvel, estou por aqui.",
+            None,
+        )
 
     # 1. Verificação de relato vago ou incompleto
     if _is_vague_report(effective_message):
