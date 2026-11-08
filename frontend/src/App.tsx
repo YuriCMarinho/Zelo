@@ -3,7 +3,7 @@ import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
-import { fetchProperties } from './api/client'
+import { fetchProperties, resetDemoData } from './api/client'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
 import { parseRoute, propertyUrl, type Route } from './routes'
@@ -22,15 +22,88 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 }
 
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
-  return <header className="site-header">
-    <div className="header-inner">
-      <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }} aria-label="Zelo, ir para imóveis">
-        <ZeloMark /><span>zelo<small>QUEBROU? A GENTE RESOLVE.</small></span>
-      </a>
-      <nav className="header-nav" aria-label="Navegação principal">{[{ url: '/', label: 'Meus imóveis', view: 'listing' }, { url: '/reservas', label: 'Reservas', view: 'reservas' }, { url: '/manutencao', label: 'Manutenção', view: 'manutencao' }, { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' }, { url: '/auditoria', label: 'Auditoria', view: 'auditoria' }].map((item) => <a key={item.url} href={item.url} aria-current={route.view === item.view || (route.view === 'property' && item.view === 'listing') ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(item.url) }}>{item.label}</a>)}</nav>
-      <div className="header-right"><div className="avatar" aria-label="Perfil do anfitrião">A</div></div>
-    </div>
-  </header>
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
+
+  const handleReset = async () => {
+    setIsResetting(true)
+    try {
+      await resetDemoData()
+      window.location.href = '/'
+    } catch {
+      setShowConfirm(false)
+    } finally {
+      setIsResetting(false)
+    }
+  }
+
+  return (
+    <header className="site-header">
+      <div className="header-inner">
+        <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }} aria-label="Zelo, ir para imóveis">
+          <ZeloMark /><span>zelo<small>QUEBROU? A GENTE RESOLVE.</small></span>
+        </a>
+        <nav className="header-nav" aria-label="Navegação principal">
+          {[
+            { url: '/', label: 'Meus imóveis', view: 'listing' },
+            { url: '/reservas', label: 'Reservas', view: 'reservas' },
+            { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
+            { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
+            { url: '/auditoria', label: 'Auditoria', view: 'auditoria' },
+          ].map((item) => (
+            <a
+              key={item.url}
+              href={item.url}
+              aria-current={route.view === item.view || (route.view === 'property' && item.view === 'listing') ? 'page' : undefined}
+              onClick={(event) => { event.preventDefault(); navigate(item.url) }}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div className="header-right">
+          <button
+            type="button"
+            className="demo-reset-btn"
+            onClick={() => setShowConfirm(true)}
+            title="Reinicializar ambiente de demonstração"
+          >
+            ↻ Resetar Demo
+          </button>
+          <div className="avatar" aria-label="Perfil do anfitrião">A</div>
+        </div>
+      </div>
+      {showConfirm && (
+        <div className="demo-reset-modal-overlay" role="dialog" aria-modal="true">
+          <div className="demo-reset-modal">
+            <h3>Resetar Dados da Demonstração?</h3>
+            <p>
+              Isso restaurará os 3 imóveis originais, limpará chamados transacionais e reiniciará o
+              ledger para que os avaliadores possam testar do zero.
+            </p>
+            <div className="demo-reset-actions">
+              <button
+                type="button"
+                className="action-secondary"
+                onClick={() => setShowConfirm(false)}
+                disabled={isResetting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="action-primary"
+                onClick={handleReset}
+                disabled={isResetting}
+              >
+                {isResetting ? 'Reinicializando...' : 'Confirmar Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
+  )
 }
 
 function PropertyCard({ property, navigate }: { property: Property; navigate: (url: string) => void }) {

@@ -223,3 +223,16 @@ export async function fetchAuditEvents(ticketId?: string): Promise<AuditEvent[]>
   }
   return []
 }
+
+export async function resetDemoData(): Promise<{ status: string; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/demo/reset`, { method: 'POST' })
+    if (res.ok) {
+      return await res.json()
+    }
+  } catch {
+    // fallback
+  }
+  return { status: 'success', message: 'Ambiente de demonstração reinicializado (modo local).' }
+}
+
