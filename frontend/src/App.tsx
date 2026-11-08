@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
+import type { ChatMessage, CostSummary, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
-import { fetchProperties, resetDemoData } from './api/client'
+import { fetchCostSummary, fetchProperties, resetDemoData } from './api/client'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
 import { parseRoute, propertyUrl, type Route } from './routes'
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)
+const usd = (val: number | undefined) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val ?? 0)
 const currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'visao-geral', label: 'Visão geral' },
@@ -24,6 +26,20 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [costs, setCosts] = useState<CostSummary | null>(null)
+
+  useEffect(() => {
+    fetchCostSummary().then(setCosts).catch(() => {})
+    const interval = setInterval(() => {
+      fetchCostSummary().then(setCosts).catch(() => {})
+    }, 8000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const spent = costs?.total_cost_usd ?? 0.0
+  const limit = costs?.budget_limit_usd ?? 25.0
+  const percent = Math.min(100, (spent / limit) * 100)
+  const isAlert = percent >= 75
 
   const handleReset = async () => {
     setIsResetting(true)
@@ -62,6 +78,33 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
           ))}
         </nav>
         <div className="header-right">
+          <div
+            className={`budget-monitor ${isAlert ? 'alert' : ''}`}
+            title={`Orçamento de IA: ${usd(spent)} de ${usd(limit)} (${percent.toFixed(1)}%)`}
+            aria-label={`Orçamento IA: ${usd(spent)} de ${usd(limit)}`}
+          >
+            <div className={`budget-dot ${isAlert ? 'alert' : ''}`} aria-hidden="true" />
+            <div className="budget-info">
+              <strong>Orçamento IA</strong>
+              <span className="tabular-nums">
+                {usd(spent)} / {usd(limit)}
+              </span>
+            </div>
+            <div
+              className="budget-bar"
+              role="progressbar"
+              aria-valuenow={spent}
+              aria-valuemin={0}
+              aria-valuemax={limit}
+              aria-label="Consumo do orçamento"
+            >
+              <div
+                className={`budget-bar-fill ${isAlert ? 'alert' : ''}`}
+                style={{ width: `${Math.max(4, percent)}%` }}
+              />
+            </div>
+          </div>
+
           <button
             type="button"
             className="demo-reset-btn"
@@ -122,8 +165,15 @@ function Listing({ navigate, propertiesList }: { navigate: (url: string) => void
   return <main>
     <section className="hero"><div className="hero-inner"><div><span className="eyebrow light">CUIDADO EM CADA DETALHE</span><h1>Seu imóvel bem cuidado.<br />Você no controle.</h1><p>Conversas, manutenção e decisões reunidas em um só lugar. A gente resolve; você aprova.</p><a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a></div><div className="hero-emblem" aria-hidden="true"><ZeloMark size={180} transparent /></div></div></section>
     <section id="imoveis" className="listing-section page-width"><div className="section-heading"><div><span className="eyebrow">SEUS ESPAÇOS</span><h2>Meus imóveis</h2><p>Acompanhe cada estadia com tranquilidade.</p></div><label className="search-box"><span aria-hidden="true">⌕</span><span className="sr-only">Buscar imóvel</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar imóvel ou local" /></label></div>
-      {filtered.length ? <div className="property-grid">{filtered.map((property) => <PropertyCard key={property.id} property={property} navigate={navigate} />)}</div> : <div className="empty-state">Nenhum imóvel encontrado para “{query}”.</div>}
-      <div className="care-banner"><div className="care-symbol"><ZeloMark size={32} /></div><div><strong>Cuidar bem é estar por perto.</strong><p>Conversas, agenda e manutenção conectadas a cada imóvel.</p></div></div>
+      {filtered.length ? (
+        <div className="property-grid">
+          {filtered.map((property) => (
+            <PropertyCard key={property.id} property={property} navigate={navigate} />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">Nenhum imóvel encontrado para “{query}”.</div>
+      )}
     </section>
   </main>
 }
@@ -157,15 +207,22 @@ const sampleQuotes = [
   { id: 'joao', name: 'João Faz-Tudo', rating: '4,5 · 21 avaliações', price: 150, when: 'Sexta, 14h', note: '' },
 ] as const
 
-function QuotesPanel({ property }: { property: Property }) {
+function QuotesPanel({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
   const [selected, setSelected] = useState<string>('carlos')
   const [confirmed, setConfirmed] = useState(false)
   const choice = sampleQuotes.find((quote) => quote.id === selected) ?? sampleQuotes[0]
-  return <section className="quotes-layout" aria-labelledby="quotes-heading"><div className="quotes-main"><div className="quotes-intro"><span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span><span className="eyebrow">EXEMPLO DE COMPARATIVO · {property.title.toLocaleUpperCase('pt-BR')}</span><h2 id="quotes-heading">Chuveiro sem água quente</h2><p>Neste exemplo, 3 de 5 eletricistas responderam. O hóspede foi avisado de que o problema está sendo cuidado.</p></div><div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">{sampleQuotes.map((quote) => <button type="button" role="radio" aria-checked={selected === quote.id} key={quote.id} className={`quote-card ${selected === quote.id ? 'selected' : ''}`} onClick={() => { setSelected(quote.id); setConfirmed(false) }}><span className="quote-card-top"><span><strong>{quote.name}</strong><small>{quote.rating}{quote.note ? ` · ${quote.note}` : ''}</small></span><b>{money(quote.price)}</b></span><span className="quote-time">{quote.when}</span></button>)}</div><div className="quote-action"><button type="button" onClick={() => setConfirmed(true)}>{confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}</button><p>Simulação local: nenhuma contratação ou agendamento é realizado.</p></div></div><aside className="quotes-aside"><span className="eyebrow">VOCÊ DECIDE</span><h3>Compare com calma.</h3><p>Preço, avaliação e horário ficam lado a lado para ajudar sua escolha. A contratação só pode acontecer após sua aprovação.</p><div className="quote-steps"><span>01 <strong>Orçamentos recebidos</strong></span><span>02 <strong>Sua escolha</strong></span><span>03 <strong>Agendamento confirmado</strong></span></div></aside></section>
+  return <section className="quotes-layout" aria-labelledby="quotes-heading"><div className="quotes-main">
+    <div style={{ background: 'var(--mar-08)', padding: '12px 16px', borderRadius: '12px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span>ℹ Esta é uma prévia estática ilustrativa. A cotação e aprovação real dos agentes ficam na aba <strong>Agente ⇄ Anfitrião</strong>.</span>
+      <button type="button" className="action-primary" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => navigate(propertyUrl(property.id, 'adm'))}>
+        Ir para Agente ⇄ Anfitrião ↗
+      </button>
+    </div>
+    <div className="quotes-intro"><span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span><span className="eyebrow">EXEMPLO DE COMPARATIVO · {property.title.toLocaleUpperCase('pt-BR')}</span><h2 id="quotes-heading">Chuveiro sem água quente</h2><p>Neste exemplo, 3 de 5 eletricistas responderam. O hóspede foi avisado de que o problema está sendo cuidado.</p></div><div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">{sampleQuotes.map((quote) => <button type="button" role="radio" aria-checked={selected === quote.id} key={quote.id} className={`quote-card ${selected === quote.id ? 'selected' : ''}`} onClick={() => { setSelected(quote.id); setConfirmed(false) }}><span className="quote-card-top"><span><strong>{quote.name}</strong><small>{quote.rating}{quote.note ? ` · ${quote.note}` : ''}</small></span><b>{money(quote.price)}</b></span><span className="quote-time">{quote.when}</span></button>)}</div><div className="quote-action"><button type="button" onClick={() => setConfirmed(true)}>{confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}</button><p>Simulação local: nenhuma contratação ou agendamento é realizado.</p></div></div><aside className="quotes-aside"><span className="eyebrow">VOCÊ DECIDE</span><h3>Compare com calma.</h3><p>Preço, avaliação e horário ficam lado a lado para ajudar sua escolha. A contratação só pode acontecer após sua aprovação.</p><div className="quote-steps"><span>01 <strong>Orçamentos recebidos</strong></span><span>02 <strong>Sua escolha</strong></span><span>03 <strong>Agendamento confirmado</strong></span></div></aside></section>
 }
 
 function PropertyPage({ property, tab, navigate, messages, sendMessage }: { property: Property; tab: PropertyTab; navigate: (url: string) => void; messages: ChatMessage[]; sendMessage: (message: ChatMessage) => void }) {
-  return <main className="page-width detail-page"><div className="breadcrumb"><a href="/" onClick={(event) => { event.preventDefault(); navigate('/') }}>Imóveis</a><span>›</span><span>{property.title}</span></div><div className="detail-intro"><div><span className="eyebrow">{property.neighborhood.toLocaleUpperCase('pt-BR')} · CEARÁ</span><h1>{property.title}</h1><p><span className="rating">★ {property.rating.toFixed(2)}</span> <span className="dot-sep">·</span> {property.reviews} avaliações <span className="dot-sep">·</span> {property.location}</p></div><div className="detail-capacity">{property.guests} hóspedes <span>·</span> {property.bedrooms} quartos <span>·</span> {property.beds} camas <span>·</span> {property.baths} banheiros</div></div><nav className="tabs" aria-label="Seções do imóvel">{tabs.map((item) => <a key={item.id} href={propertyUrl(property.id, item.id)} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'active' : ''} onClick={(event) => { event.preventDefault(); navigate(propertyUrl(property.id, item.id)) }}>{item.label}</a>)}</nav><div className="tab-content" key={property.id}>{tab === 'visao-geral' ? <Overview property={property} /> : tab === 'orcamentos' ? <QuotesPanel property={property} /> : <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />}</div></main>
+  return <main className="page-width detail-page"><div className="breadcrumb"><a href="/" onClick={(event) => { event.preventDefault(); navigate('/') }}>Imóveis</a><span>›</span><span>{property.title}</span></div><div className="detail-intro"><div><span className="eyebrow">{property.neighborhood.toLocaleUpperCase('pt-BR')} · CEARÁ</span><h1>{property.title}</h1><p><span className="rating">★ {property.rating.toFixed(2)}</span> <span className="dot-sep">·</span> {property.reviews} avaliações <span className="dot-sep">·</span> {property.location}</p></div><div className="detail-capacity">{property.guests} hóspedes <span>·</span> {property.bedrooms} quartos <span>·</span> {property.beds} camas <span>·</span> {property.baths} banheiros</div></div><nav className="tabs" aria-label="Seções do imóvel">{tabs.map((item) => <a key={item.id} href={propertyUrl(property.id, item.id)} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'active' : ''} onClick={(event) => { event.preventDefault(); navigate(propertyUrl(property.id, item.id)) }}>{item.label}</a>)}</nav><div className="tab-content" key={property.id}>{tab === 'visao-geral' ? <Overview property={property} /> : tab === 'orcamentos' ? <QuotesPanel property={property} navigate={navigate} /> : <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />}</div></main>
 }
 
 export default function App() {
@@ -176,5 +233,33 @@ export default function App() {
   useEffect(() => { const onPopState = () => setRoute(parseRoute(window.location.pathname, window.location.search)); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState) }, [])
   const property = useMemo(() => route.view === 'property' ? propertiesList.find((item) => item.id === route.propertyId) : undefined, [route, propertiesList])
   function navigate(url: string) { window.history.pushState(null, '', url); setRoute(parseRoute(window.location.pathname, window.location.search)); window.scrollTo?.(0, 0) }
-  return <div className="app-shell"><Header navigate={navigate} route={route} />{route.view === 'auditoria' ? <main className="page-width detail-page"><AuditPanel /></main> : route.view === 'property' && property ? <PropertyPage property={withLocalReservations(property)} tab={route.tab} navigate={navigate} messages={messages} sendMessage={(message) => setMessages((previous) => [...previous, message])} /> : route.view === 'reservas' || route.view === 'manutencao' || route.view === 'configuracoes' ? <ManagementPage key={route.view} view={route.view} navigate={navigate} /> : <Listing navigate={navigate} propertiesList={propertiesList} />}<footer className="site-footer"><div className="page-width"><ZeloMark size={32} /><span>Quebrou algo no imóvel? A gente resolve. Você só aprova.</span><span>© {new Date().getFullYear()} Zelo</span></div></footer></div>
+  return (
+    <div className="app-shell">
+      <Header navigate={navigate} route={route} />
+      {route.view === 'auditoria' ? (
+        <main className="page-width detail-page">
+          <AuditPanel />
+        </main>
+      ) : route.view === 'property' && property ? (
+        <PropertyPage
+          property={withLocalReservations(property)}
+          tab={route.tab}
+          navigate={navigate}
+          messages={messages}
+          sendMessage={(message) => setMessages((previous) => [...previous, message])}
+        />
+      ) : route.view === 'reservas' || route.view === 'manutencao' || route.view === 'configuracoes' ? (
+        <ManagementPage key={route.view} view={route.view} navigate={navigate} />
+      ) : (
+        <Listing navigate={navigate} propertiesList={propertiesList} />
+      )}
+      <footer className="site-footer">
+        <div className="page-width">
+          <ZeloMark size={32} />
+          <span>Quebrou algo no imóvel? A gente resolve. Você só aprova.</span>
+          <span>© {new Date().getFullYear()} Zelo</span>
+        </div>
+      </footer>
+    </div>
+  )
 }
