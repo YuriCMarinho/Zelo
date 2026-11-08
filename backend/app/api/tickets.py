@@ -5,12 +5,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.agents.resolver_graph import resume_resolution
+from app.agents.resolver_graph import (
+    record_date_response,
+    record_quote_response,
+    resume_resolution,
+    retry_provider_collection,
+)
 from app.db.models import MaintenanceTicket, Property, Quote
 from app.db.session import get_db
 from app.schemas.common import QuoteStatus, TicketStatus
 from app.schemas.quote import QuoteRead
+from app.schemas.resolver import ProviderDateReply, ProviderQuoteReply
 from app.schemas.ticket import MaintenanceTicketRead, TicketApprovalRequest
+from app.security.guardrails import SecurityViolationError
 
 router = APIRouter(prefix="/api/tickets", tags=["Tickets"])
 property_tickets_router = APIRouter(prefix="/api/properties", tags=["Imóveis"])
@@ -109,8 +116,14 @@ async def start_ticket_resolution(
             detail=f"Ticket '{ticket_id}' não encontrado.",
         )
 
-    # Se já estiver aguardando aprovação ou posterior, apenas retorna o ticket atual
-    if ticket.status not in (TicketStatus.OPEN.value, TicketStatus.NO_PROVIDERS_FALLBACK.value):
+    # Sem prestadores: dispara de novo a coleta sob demanda do Nó S (retoma se encontrar)
+    if ticket.status == TicketStatus.NO_PROVIDERS_FALLBACK.value:
+        await retry_provider_collection(ticket_id)
+        db.expire_all()
+        return db.get(MaintenanceTicket, ticket_id) or ticket
+
+    # Se já estiver em andamento ou finalizado, apenas retorna o ticket atual
+    if ticket.status != TicketStatus.OPEN.value:
         return ticket
 
     from app.agents.resolver_graph import LangGraphResolverStarter, compiled_resolver_graph
@@ -199,6 +212,80 @@ async def approve_ticket_quote(
             detail=f"Ticket '{ticket_id}' não encontrado após atualização.",
         )
     return refreshed_ticket
+
+
+def _refreshed(db: Session, ticket_id: str) -> MaintenanceTicket:
+    db.expire_all()
+    ticket = db.get(MaintenanceTicket, ticket_id)
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket '{ticket_id}' não encontrado.",
+        )
+    return ticket
+
+
+@router.post(
+    "/{ticket_id}/quotes/{provider_id}/response",
+    response_model=MaintenanceTicketRead,
+    summary="Resposta de orçamento do prestador",
+    description=(
+        "Registra o orçamento enviado por um prestador (canal simulado/allowlist). "
+        "Quando todos respondem, o Nó 3 segue para a síntese do ADM."
+    ),
+)
+async def provider_quote_response(
+    ticket_id: str,
+    provider_id: str,
+    payload: ProviderQuoteReply,
+    db: DatabaseDep,
+) -> MaintenanceTicket:
+    _refreshed(db, ticket_id)
+    try:
+        await record_quote_response(
+            ticket_id=ticket_id,
+            provider_id=provider_id,
+            amount=payload.amount,
+            description=payload.description,
+            availability=payload.proposed_availability,
+        )
+    except SecurityViolationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Violação de segurança nos guardrails: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return _refreshed(db, ticket_id)
+
+
+@router.post(
+    "/{ticket_id}/date-response",
+    response_model=MaintenanceTicketRead,
+    summary="Devolutiva do dia do prestador",
+    description=(
+        "O prestador escolhido aceita ou recusa a data proposta. "
+        "Recusa volta ao passo 3; aceite confirma o agendamento."
+    ),
+)
+async def provider_date_response(
+    ticket_id: str,
+    payload: ProviderDateReply,
+    db: DatabaseDep,
+) -> MaintenanceTicket:
+    _refreshed(db, ticket_id)
+    try:
+        await record_date_response(
+            ticket_id=ticket_id, accepted=payload.accepted, message=payload.message
+        )
+    except SecurityViolationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Violação de segurança nos guardrails: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return _refreshed(db, ticket_id)
 
 
 @property_tickets_router.get(

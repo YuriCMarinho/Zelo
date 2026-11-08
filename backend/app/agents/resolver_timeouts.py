@@ -17,6 +17,16 @@ logger = logging.getLogger("smartrepair.resolver_timeouts")
 # Registro em memória de timers ativos para rastreamento e facilidade de testes
 _active_timeout_jobs: dict[str, dict[str, Any]] = {}
 
+# Scheduler da aplicação (definido no lifespan do FastAPI). Sem ele, os timers ficam
+# só registrados em memória e não disparam (caso dos testes unitários).
+_default_scheduler: BaseScheduler | None = None
+
+
+def set_timeout_scheduler(scheduler: BaseScheduler | None) -> None:
+    """Define o scheduler usado por padrão para disparar timeouts e lembretes."""
+    global _default_scheduler
+    _default_scheduler = scheduler
+
 
 def clear_active_timeouts() -> None:
     """Limpa o registro de timers ativos (útil para testes unitários)."""
@@ -39,6 +49,7 @@ def _register_job(
 ) -> str:
     """Função utilitária interna para agendamento compartilhado de jobs e lembretes."""
     run_at = datetime.now(UTC) + timedelta(minutes=delay_minutes)
+    scheduler = scheduler or _default_scheduler
 
     _active_timeout_jobs[job_id] = {
         "job_id": job_id,
@@ -118,9 +129,48 @@ def register_adm_reminder(
     )
 
 
+def register_date_timeout(
+    ticket_id: str,
+    run_id: str,
+    timeout_minutes: int,
+    callback: Callable[..., Any],
+    scheduler: BaseScheduler | None = None,
+) -> str:
+    """Registra timer de espera pela devolutiva do dia do prestador escolhido."""
+    return _register_job(
+        job_id=f"timeout_date_{ticket_id}",
+        job_type="date_timeout",
+        ticket_id=ticket_id,
+        run_id=run_id,
+        delay_minutes=timeout_minutes,
+        callback=callback,
+        scheduler=scheduler,
+    )
+
+
+def register_provider_collection_timeout(
+    ticket_id: str,
+    run_id: str,
+    timeout_minutes: int,
+    callback: Callable[..., Any],
+    scheduler: BaseScheduler | None = None,
+) -> str:
+    """Registra timer da coleta sob demanda do Nó S (fallback sem prestadores)."""
+    return _register_job(
+        job_id=f"timeout_providers_{ticket_id}",
+        job_type="provider_collection_timeout",
+        ticket_id=ticket_id,
+        run_id=run_id,
+        delay_minutes=timeout_minutes,
+        callback=callback,
+        scheduler=scheduler,
+    )
+
+
 def cancel_timeout_job(job_id: str, scheduler: BaseScheduler | None = None) -> bool:
     """Cancela um job de timeout previamente agendado quando a ação esperada ocorre a tempo."""
     removed_from_memory = _active_timeout_jobs.pop(job_id, None) is not None
+    scheduler = scheduler or _default_scheduler
 
     if scheduler is not None:
         with contextlib.suppress(Exception):

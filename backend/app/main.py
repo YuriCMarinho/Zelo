@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.agents.resolver_graph import close_resolver_checkpointer, init_resolver_checkpointer
+from app.agents.resolver_timeouts import set_timeout_scheduler
 from app.api import (
     audit_router,
     chat_router,
@@ -33,13 +35,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         run_seed()
     except Exception as e:
         print(f"Aviso durante seed de inicialização: {e}")
+    await init_resolver_checkpointer()
     scheduler = None
     if settings.environment != "testing":
         scheduler = create_provider_scheduler()
         scheduler.start()
+        set_timeout_scheduler(scheduler)
     try:
         yield
     finally:
+        set_timeout_scheduler(None)
+        await close_resolver_checkpointer()
         if scheduler is not None:
             scheduler.shutdown(wait=False)
 
