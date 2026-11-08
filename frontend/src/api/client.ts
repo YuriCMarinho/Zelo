@@ -365,14 +365,13 @@ export async function fetchAuditEvents(ticketId?: string): Promise<AuditEvent[]>
 }
 
 export async function resetDemoData(): Promise<{ status: string; message: string }> {
-  try {
-    const res = await fetch(`${API_BASE}/demo/reset`, { method: 'POST' })
-    if (res.ok) {
-      return await res.json()
-    }
-  } catch {
-    // fallback
+  const data = await requestJson(
+    `${API_BASE}/demo/reset`, { method: 'POST' }, 'Falha ao reinicializar a demonstração',
+  )
+  if (!data || typeof data !== 'object' || !('status' in data) || data.status !== 'success' ||
+    !('message' in data) || typeof data.message !== 'string') {
+    throw new Error('A reinicialização retornou uma resposta inválida. Tente novamente.')
   }
-  return { status: 'success', message: 'Ambiente de demonstração reinicializado (modo local).' }
+  return { status: data.status, message: data.message }
 }
 

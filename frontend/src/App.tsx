@@ -26,6 +26,7 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef<HTMLDivElement>(null)
@@ -52,11 +53,12 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
 
   const handleReset = async () => {
     setIsResetting(true)
+    setResetError('')
     try {
       await resetDemoData()
       window.location.href = '/'
-    } catch {
-      setShowConfirm(false)
+    } catch (cause) {
+      setResetError(cause instanceof Error ? cause.message : 'Não foi possível reinicializar os dados.')
     } finally {
       setIsResetting(false)
     }
@@ -204,6 +206,7 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
                 {isResetting ? 'Reinicializando...' : 'Confirmar Reset'}
               </button>
             </div>
+            {resetError && <p role="alert">{resetError}</p>}
           </div>
         </div>
       )}
