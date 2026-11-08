@@ -215,7 +215,7 @@ export function ChatPanel({
       </div>
 
       {/* Seletor de Canal Isolado (Canal do Hóspede vs Canal Operacional da Camareira) */}
-      <div className="chat-role-bar" style={{ flexWrap: 'wrap', gap: '8px' }}>
+      <div className="chat-role-bar">
         <span>Estou falando como:</span>
         <div className="role-chips" role="radiogroup" aria-label="Remetente da mensagem">
           <button
@@ -235,11 +235,6 @@ export function ChatPanel({
             Camareira
           </button>
         </div>
-        <small style={{ color: 'var(--mar-72)', fontSize: '12px', marginLeft: 'auto' }}>
-          {role === 'hospede'
-            ? 'Histórico exclusivo do hóspede (reservas, dúvidas ou relatos de manutenção).'
-            : 'Histórico interno da equipe para vistoria pós-checkout.'}
-        </small>
       </div>
 
       {/* Balões de mensagens */}

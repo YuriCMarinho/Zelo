@@ -521,6 +521,8 @@ h1, h2, h3, h4, .font-title {
 
 /* Chat view (Conversa.dc.html) */
 .chat-container {
+  width: 100%;
+  min-width: 0;
   background: var(--areia);
   border: 1px solid var(--mar-16);
   border-radius: 24px;
