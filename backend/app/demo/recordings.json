@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "responses": {
+    "router.commercial": {
+      "node": "router",
+      "model": "Qwen/Qwen3.5-4B",
+      "content": "commercial_node1",
+      "captured_at": "2026-11-08T07:39:56.577031+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "4d206c0c509e34c07a77b5f76accb4dfcabaf8a210a4b0f7ac44b7039f47342c",
+      "capture_input_tokens": 68,
+      "capture_output_tokens": 4,
+      "capture_cost_usd": 7.6e-06,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Roteador: dúvidas de estadia = commercial_node1; defeito ou conserto = maintenance_node2. Retorne apenas o identificador da categoria, sem explicação ou formatação."
+        },
+        {
+          "role": "user",
+          "content": "Olá, gostaria de tirar dúvidas sobre a estadia."
+        }
+      ]
+    },
+    "router.maintenance": {
+      "node": "router",
+      "model": "Qwen/Qwen3.5-4B",
+      "content": "maintenance_node2",
+      "captured_at": "2026-11-08T07:39:58.752042+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "180457eda3fb29976ab1ce38b20c78a0b951baf21b7c26ccf57a0d0d992f9383",
+      "capture_input_tokens": 69,
+      "capture_output_tokens": 4,
+      "capture_cost_usd": 7.7e-06,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Roteador: dúvidas de estadia = commercial_node1; defeito ou conserto = maintenance_node2. Retorne apenas o identificador da categoria, sem explicação ou formatação."
+        },
+        {
+          "role": "user",
+          "content": "Há um vazamento na cozinha e preciso de conserto."
+        }
+      ]
+    },
+    "commercial.greeting": {
+      "node": "commercial_node1",
+      "model": "Qwen/Qwen3.5-9B",
+      "content": "Olá! Como posso ajudar você hoje?",
+      "captured_at": "2026-11-08T07:40:01.209953+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "e9d92d31ea116ad7dd04645db9a7463c6e91747b5144247e7b6e2b76ab391479",
+      "capture_input_tokens": 61,
+      "capture_output_tokens": 10,
+      "capture_cost_usd": 1.287e-05,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Você é o Assistente Zelo. Responda à saudação em uma frase curta, simpática, sem emojis ou Markdown, perguntando como pode ajudar. Não presuma uma reserva."
+        },
+        {
+          "role": "user",
+          "content": "Olá!"
+        }
+      ]
+    },
+    "commercial.unavailable": {
+      "node": "commercial_node1",
+      "model": "Qwen/Qwen3.5-9B",
+      "content": "A informação solicitada precisa ser confirmada diretamente com o anfitrião.",
+      "captured_at": "2026-11-08T07:40:06.586025+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "eea048aceabb31bae5503f796d52c7994511444c8d63068eac8577f736ec63cc",
+      "capture_input_tokens": 81,
+      "capture_output_tokens": 16,
+      "capture_cost_usd": 1.777e-05,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Na demonstração gravada você não tem confirmação da informação pedida. Diga em uma frase curta que a informação precisa ser confirmada com o anfitrião. Não mencione uma comodidade, imóvel, número ou detalhe específico. Sem Markdown."
+        },
+        {
+          "role": "user",
+          "content": "Pode me dar uma informação que não está cadastrada?"
+        }
+      ]
+    },
+    "validator_node2": {
+      "node": "validator_node2",
+      "model": "Qwen/Qwen3.5-4B",
+      "content": "Relato de manutenção recebido.",
+      "captured_at": "2026-11-08T07:40:09.621691+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "2685ec7b4ca0cf3c22418ea918c421962c9c4ea42cdf3e4fb46c049956b42c33",
+      "capture_input_tokens": 52,
+      "capture_output_tokens": 7,
+      "capture_cost_usd": 6.6e-06,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Confirme brevemente o recebimento do relato de manutenção, sem inventar categoria, preço, data ou contratação. Sem Markdown."
+        },
+        {
+          "role": "user",
+          "content": "Relato de problema no imóvel recebido."
+        }
+      ]
+    },
+    "resolver_adm_summary": {
+      "node": "resolver_adm_summary",
+      "model": "Qwen/Qwen3.5-9B",
+      "content": "Compare os orçamentos exibidos nos cartões da interface e selecione o prestador que melhor atenda às suas necessidades.",
+      "captured_at": "2026-11-08T07:40:11.782315+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "ef83497c679c6c8389081157a87f90e1f5e1b03a3587efc056ae49f6268db25e",
+      "capture_input_tokens": 86,
+      "capture_output_tokens": 26,
+      "capture_cost_usd": 2.112e-05,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Escreva uma orientação curta e neutra para o anfitrião comparar os orçamentos exibidos na tela e escolher o prestador. Não escolha por ele nem invente nomes, valores, quantidade, datas ou serviços. Não afirme ter notificado o hóspede."
+        },
+        {
+          "role": "user",
+          "content": "Os orçamentos recebidos estão nos cartões da interface."
+        }
+      ]
+    },
+    "resolver_notify_tenant": {
+      "node": "resolver_notify_tenant",
+      "model": "Qwen/Qwen3.5-4B",
+      "content": "Lembre-se que a visita de manutenção {{service}} está confirmada para {{scheduled_date}}.",
+      "captured_at": "2026-11-08T07:40:15.726631+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "51bcf69b0f9e8d4f792a7ad4e4b446abb8591caf8fe85c9302acd7f496d37bb3",
+      "capture_input_tokens": 80,
+      "capture_output_tokens": 21,
+      "capture_cost_usd": 1.22e-05,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Redija uma frase curta avisando o hóspede da visita de manutenção confirmada. Inclua literalmente os dois marcadores {{service}} e {{scheduled_date}}, sem alterar os marcadores, sem Markdown e sem dados adicionais."
+        },
+        {
+          "role": "user",
+          "content": "Serviço: {{service}}. Data/Hora: {{scheduled_date}}."
+        }
+      ]
+    },
+    "scraper_nodeS": {
+      "node": "scraper_nodeS",
+      "model": "Qwen/Qwen3.5-4B",
+      "content": "{\n  \"confirmed\": false\n}",
+      "captured_at": "2026-11-08T07:40:23.785007+00:00",
+      "source": "featherless",
+      "capture_run_id": "recorded-demo-capture-7d3f1ddb",
+      "prompt_sha256": "7da0e9efef81a964db989c176a3c63259ac6404b57f621fc8fb8dbb709ae5e66",
+      "capture_input_tokens": 48,
+      "capture_output_tokens": 10,
+      "capture_cost_usd": 6.8e-06,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Classifique confirmação explícita de contato. Responda apenas JSON com confirmed booleano; dúvida é false."
+        },
+        {
+          "role": "user",
+          "content": "Talvez, ainda preciso verificar."
+        }
+      ]
+    }
+  }
+}

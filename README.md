@@ -25,10 +25,12 @@ O produto opera com um **Ponto Único de Chat por Imóvel** (equipado com um rot
 
 ## Documentação e Governança (Time de 4 Devs + 3 Agentes de IA)
 
-- **Fonte da verdade do escopo:** [`planejamento2.md`](planejamento2.md)
-- **Plano de implementação, arquitetura e sprints:** [`docs/PLAN.md`](docs/PLAN.md)
+- **Fonte única da verdade do escopo e arquitetura:** [`docs/PLAN.md`](docs/PLAN.md)
 - **Estimativa, tetos e controle de custos (Featherless + Langfuse):** [`docs/COST.md`](docs/COST.md)
 - **Status atual das fases, sprints e tasks:** [`docs/STATUS.md`](docs/STATUS.md)
+- **Pacote de submissão e links pendentes:** [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
+- **Ferramentas e modelos usados:** [`docs/TOOLS.md`](docs/TOOLS.md)
+- **Plano B com respostas gravadas:** [`docs/RECORDED_DEMO.md`](docs/RECORDED_DEMO.md)
 - **Regras de repositório, branches, commits e DoR/DoD:** [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)
 - **Instruções dos 3 Agentes de Desenvolvimento:**
   - Planejador: [`agents/planner.md`](agents/planner.md)

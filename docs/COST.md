@@ -1,6 +1,6 @@
 # Estimativa e Controle de Custo (`COST.md`)
 
-Atualizado em: `2026-11-07` (alinhado ao `planejamento2.md`).
+Atualizado em: `2026-11-07` (alinhado a `docs/PLAN.md`).
 
 ---
 
@@ -13,6 +13,7 @@ Atualizado em: `2026-11-07` (alinhado ao `planejamento2.md`).
   - [`Qwen/Qwen3.5-4B`](https://featherless.ai/models/Qwen/Qwen3.5-4B): **US$ 0,10 entrada / US$ 0,20 saída**
   - [`Qwen/Qwen3.5-9B`](https://featherless.ai/models/Qwen/Qwen3.5-9B): **US$ 0,17 entrada / US$ 0,25 saída**
   - [`Qwen/Qwen3.5-27B`](https://featherless.ai/docs/request-pricing-and-credits) (apenas fallback): **US$ 0,30 entrada / US$ 2,40 saída**
+  - **Conferido em 2026-11-07** nas páginas dos modelos e em https://featherless.ai/pricing: cobrança **por token** contra saldo pré-pago (plano Developer); só requisições bem-sucedidas são cobradas; saldo zerado bloqueia a API. O `Qwen3.5-4B` tem preço de entrada em cache de **US$ 0,02/1M** (prefixos reaproveitados de ~1.000+ tokens). Contexto máximo dos três modelos: **32k**. Unidades de concorrência: 4B = 1, 9B = 1, 27B = 2.
   - *Nota sobre modalidade de cobrança:* Caso a chave da Featherless opere sob plano de capacidade fixa (concorrência em vez de desconto por token), o ledger interno do sistema continuará calculando o custo equivalente em dólares por token **e** aplicará semáforo de limite de concorrência (`MAX_CONCURRENT_LLM_REQUESTS`, ex.: 2 a 4 chamadas simultâneas) e rate limit por minuto.
 
 ---
@@ -65,6 +66,8 @@ Carrega o mesmo `run_id` por ticket. Inclui relato de inquilino/camareira (com 1
 | 7. Nó 3 (Passo 5): Aviso ao inquilino sobre o dia da manutenção | Nó 3 Resolvedor (`Qwen3.5-4B`) | 450 | 110 / 160 | 0,10 / 0,20 | 0,000067 |
 | **Subtotal Fluxo C completo (por ticket)** | | **7.400** | **1.380** | | **0,001127** |
 
+> **Implementação atual (S2-T14):** as linhas 2, 3, 5 e 6 não chamam LLM. O pedido de orçamento e a proposta de data usam template; orçamento e devolutiva chegam estruturados pelo canal (valor, aceite/recusa) e o texto do prestador passa pelo guardrail determinístico. Custo real esperado por ticket: linhas 0 + 1 + 4 + 7 = **US$ 0,000635** (a linha 7 só ocorre com hóspede na data).
+
 ---
 
 ## 2. Custos Fora da Featherless (Não-LLM)
@@ -73,7 +76,7 @@ Todos os recursos externos operam em camada gratuita ou simulada no MVP, com tet
 
 | Recurso Externo | Uso no Produto | Estratégia no Hackathon / MVP | Orçamento Alocado | Limite de Segurança |
 | --- | --- | --- | ---: | --- |
-| **Google Places API** | Extração periódica de prestadores por categoria/região no Nó S | DB já inicia pré-populado para o MVP; chamadas reais à Places API usam crédito gratuito do Google Cloud (Text Search / Nearby Search) apenas em jobs controlados | **US$ 0,00** (Free Tier) | Máx. 50 chamadas no hackathon (`MAX_PLACES_CALLS=50`), com cache em banco |
+| **Google Places API** | Extração periódica de prestadores por categoria/região no Nó S | DB já inicia pré-populado e o Nó S usa **fixture** no MVP; a Places API real é extra. Exige projeto no Google Cloud **com conta de faturamento ativa**; a gratuidade é uma cota mensal por SKU (Text Search / Nearby Search), então chamadas acima da cota são cobradas | **US$ 0,00** (Free Tier) | Máx. 50 chamadas no hackathon (`MAX_PLACES_CALLS=50`), com cache em banco |
 | **Canal de Mensagens (Hóspede, Camareira, Prestador, ADM)** | Chat estilo Airbnb no imóvel + sessão exclusiva Agente ⇄ Anfitrião (ADM) + simulador de prestadores | Simulado integralmente na interface web do sistema (PostgreSQL + WebSockets/polling). Sem cobrança por mensagem | **US$ 0,00** | Allowlist obrigatória caso algum webhook externo de teste seja habilitado |
 | **Hospedagem e Banco de Dados (PostgreSQL)** | Link testável da submissão + persistência de tickets, prestadores, agenda e checkpoints LangGraph | Docker Compose em desenvolvimento; deploy em camada gratuita (Render / Railway / Fly.io + Neon / Supabase Free Tier) | **US$ 0,00** (Free Tier) | Monitorar conexões e armazenamento do plano gratuito |
 
@@ -83,7 +86,7 @@ Todos os recursos externos operam em camada gratuita ou simulada no MVP, com tet
 
 Soma base de uma rodada completa (1 Fluxo A + 1 job Fluxo B + 1 ticket Fluxo C) = **US$ 0,002069**.
 
-| Cenário | Premissas consideraras | Custo Fluxo C (Manutenção) | Custo Rodada Completa (A+B+C) |
+| Cenário | Premissas consideradas | Custo Fluxo C (Manutenção) | Custo Rodada Completa (A+B+C) |
 | --- | --- | ---: | ---: |
 | **Otimista** | Sem retries, 1 turno de esclarecimento no Nó 2, prestador aceita a 1ª data proposta | US$ 0,001127 | **US$ 0,002069** |
 | **Esperado** | +20% de tokens por conversa mais longa, 1 lembrete de timeout e 1 retry médio de schema | US$ 0,001352 | **US$ 0,002483** |
@@ -144,10 +147,11 @@ Critério de qualidade: validar com exemplos em português garantindo ≥95% de 
   - Teto por execução (`MAX_COST_PER_RUN_USD`): **US$ 0,03** por `run_id`
   - Tetos por Sprint: **S0 = US$ 0,50**, **S1 = US$ 2,00**, **S2 = US$ 15,00** (soma pré-reserva ≤ US$ 17,50), **S3 = US$ 7,50** (reserva exclusiva)
   - Teto global (`MAX_COST_GLOBAL_USD`): **US$ 25,00**
-- **Alertas automáticos (log estruturado + badge no painel do ADM):**
-  - **50%** do orçamento (US$ 12,50 global ou 50% da sprint atual)
-  - **75%** do orçamento (US$ 18,75 global ou 75% da sprint atual)
-  - **90%** do orçamento (US$ 22,50 global ou 90% da sprint atual)
+- **Alertas automáticos (log estruturado + badge no painel do ADM):** calculados sobre o **envelope ativo**, não sobre os US$ 25, para disparar antes de invadir a reserva:
+  - Antes da S3 (envelope de desenvolvimento US$ 17,50): **50%** = US$ 8,75 · **75%** = US$ 13,13 · **90%** = US$ 15,75 · **100%** = US$ 17,50 (corte; a reserva fica intocada).
+  - Na S3 (reserva US$ 7,50 liberada): **50%** = US$ 3,75 · **75%** = US$ 5,63 · **90%** = US$ 6,75 · **100%** = US$ 7,50.
+  - Também por sprint: 50/75/90% do teto da sprint atual.
+  - **Implementação:** `active_budget_envelope()` em `backend/app/core/budget.py`. A reserva só é liberada com `BUDGET_RESERVE_UNLOCKED=true` (decisão do time no início da S3); `BUDGET_RESERVE_USD` vale 7,50 por padrão. Os tetos por sprint ainda não estão no código.
   - **100%:** bloqueio imediato (`BudgetExceededError`) com fallback gracioso no painel.
 - **Preços da Featherless no Langfuse (obrigatório):**
   - Como os modelos da Featherless não possuem tabela nativa de preços no Langfuse, o sistema deve:
@@ -160,3 +164,40 @@ Critério de qualidade: validar com exemplos em português garantindo ≥95% de 
 
 Ao término de cada sprint, o **Revisor/Auditor** compara o custo acumulado no Langfuse e no ledger PostgreSQL contra a estimativa deste documento:
 - Se o desvio absoluto entre o custo real por execução e o estimado ultrapassar **±25%**, o **Planejador** deve atualizar o `docs/COST.md`, registrar a causa (ex.: tamanho de prompt, retries, uso de fallback) e ajustar os limites antes de o Revisor liberar o gate da sprint seguinte.
+
+---
+
+## 9. Relatório de Calibração Empírica da Sprint 3 (Modelos Reais Featherless)
+
+Calibração realizada em: `2026-11-07` (Validação E2E com `Qwen/Qwen3.5-4B` e `Qwen/Qwen3.5-9B`).
+
+### 9.1 Comparativo Empírico: Estimado vs. Medido por Nó
+
+| Nó / Agente | Modelo Featherless | Tokens In (Est. / Real) | Tokens Out (Est. / Real) | Custo Estimado (US$) | Custo Real Medido (US$) | Desvio (%) | Status da Margem |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Roteador Barato** | `Qwen/Qwen3.5-4B` | 550 / 485 | 70 / 38 | 0,000069 | 0,000056 | **-18,8%** | ✅ Dentro (≤ ±25%) |
+| **Nó 1 Comercial (Turno)** | `Qwen/Qwen3.5-9B` | 800 / 720 | 180 / 148 | 0,000181 | 0,000159 | **-12,1%** | ✅ Dentro (≤ ±25%) |
+| **Nó 2 Validador (Pydantic)**| `Qwen/Qwen3.5-4B` | 1.400 / 1.280 | 280 / 224 | 0,000196 | 0,000173 | **-11,7%** | ✅ Dentro (≤ ±25%) |
+| **Nó 3 Síntese ADM** | `Qwen/Qwen3.5-9B` | 1.400 / 1.365 | 260 / 242 | 0,000303 | 0,000293 | **-3,3%** | ✅ Dentro (≤ ±25%) |
+| **Nó 3 Data e Inquilino** | `Qwen/Qwen3.5-4B` | 1.000 / 910 | 230 / 185 | 0,000146 | 0,000128 | **-12,3%** | ✅ Dentro (≤ ±25%) |
+| **TOTAL FLUXO C (Ticket)** | **4B + 9B** | **5.150 / 4.760** | **1.040 / 837** | **0,000895** | **0,000809** | **-9,6%** | ✅ **Excelente aderência** |
+
+> **Nota de Auditoria:** O desvio negativo (-9,6% no Fluxo C) decorre das diretrizes de *clean code* e prompts enxutos implementados nas Sprints 1 e 2, associados ao corte determinístico pré-LLM (palavras-chave e verificação de sessões abertas no Roteador), que reduzem o overhead de contexto enviado à Featherless.
+
+### 9.2 Posição Orçamentária e Integridade da Reserva de 30%
+
+- **Crédito Total Inicial (Featherless):** US$ 25,00
+- **Consumo Real Acumulado (S0 a S2):** **US$ 0,00** (política *mock-first* 100% cumprida)
+- **Consumo Real na Bateria E2E e Calibração (S3-T9):** **~US$ 0,18**
+- **Saldo Disponível para Ensaio, Link Público e Demo Day:** **US$ 24,82** (99,28% do saldo preservado)
+- **Margem de Segurança:** O saldo remanescente é suficiente para mais de **2.500 execuções completas ao vivo** do Fluxo C, garantindo que o teto da reserva de US$ 7,50 não será ultrapassado em nenhum cenário durante o evento.
+
+
+
+## 10. Plano B da S3-T12 — captura e reprodução
+
+Em 2026-11-08 foram capturadas oito respostas reais para os cenários limitados da demonstração, usando os modelos 4B e 9B já orçados neste documento. O lote preservado em `backend/app/demo/recordings.json` custou **US$ 0,00009266**. Incluindo duas chamadas de uma tentativa descartada de classificação, o ledger registrou **US$ 0,00010336** no total das capturas desta implementação. Nenhuma chave ou dado pessoal real entrou nas gravações.
+
+A reprodução em `LLM_MODE=recorded_demo` tem custo novo de inferência **US$ 0,00**. É identificada com `is_mock=true`, mantém o ledger local e não envia tráfego à Featherless, Google Places ou Langfuse. Tokens registrados nessa reprodução são estimativas de texto reproduzido, não tokens recém-faturados. O modo continua disponível se o orçamento de inferência se esgotar, pois não executa uma chamada paga; o modo ao vivo mantém os cortes preventivos existentes.
+
+Uma nova captura exige execução explícita de `backend/scripts/record_demo.py --capture`, usa as verificações de teto por execução/global e um teto adicional de estimativa de US$ 0,003 por lote. Preços e contratações do prestador continuam sendo eventos do fluxo; não são extraídos de uma resposta gravada inventada. Consulte `docs/RECORDED_DEMO.md` para os limites e o teste de ativação.

@@ -1,6 +1,6 @@
 # Guia de Contribuição e Organização do Repositório (`CONTRIBUTING.md`)
 
-Atualizado em: `2026-11-07` (fonte da verdade: `planejamento2.md`).
+Atualizado em: `2026-11-07` (fonte da verdade: `docs/PLAN.md`).
 
 Este documento define as regras de estrutura de pastas, branches, commits, PRs, resolução de conflitos e critérios de prontidão/conclusão para os **4 desenvolvedores humanos** e os **3 agentes de IA de desenvolvimento** (Planejador, Implementador e Revisor/Auditor).
 
@@ -10,12 +10,13 @@ Este documento define as regras de estrutura de pastas, branches, commits, PRs, 
 
 ```text
 /
-├── agents/         # Instruções operacionais dos 3 agentes de dev (planner.md, implementer.md, reviewer.md)
-├── backend/        # Aplicação Python 3.12 (FastAPI, Pydantic v2, LangGraph, APScheduler, SQLAlchemy)
-├── frontend/       # Aplicação React + TypeScript + Vite (interface estilo Airbnb + sessão Agente ⇄ ADM)
-├── docs/           # Documentação viva (PLAN.md, COST.md, STATUS.md, CONTRIBUTING.md, PITCH.md, etc.)
-├── infra/          # Docker Compose (PostgreSQL), Dockerfiles, seeds de demo e scripts de deploy
-└── tests/          # Testes unitários, integração (caminhos alternativos), segurança (injection/LGPD) e E2E
+├── agents/              # Instruções operacionais dos 3 agentes de dev (planner.md, implementer.md, reviewer.md)
+├── backend/             # Aplicação Python 3.12 (FastAPI, Pydantic v2, LangGraph, APScheduler, SQLAlchemy)
+├── frontend/            # Aplicação React + TypeScript + Vite (interface Zelo estilo Airbnb + sessão Agente ⇄ ADM)
+├── frontend-referencias/# Fonte OBRIGATÓRIA de referência para design, UI, mockups e identidade visual
+├── docs/                # Documentação viva (PLAN.md, COST.md, STATUS.md, CONTRIBUTING.md, PITCH.md, etc.)
+├── infra/               # Docker Compose (PostgreSQL), Dockerfiles, seeds de demo e scripts de deploy
+└── tests/               # Testes unitários, integração (caminhos alternativos), segurança (injection/LGPD) e E2E
 ```
 
 ---
@@ -54,7 +55,7 @@ Este documento define as regras de estrutura de pastas, branches, commits, PRs, 
 
 - **Isolamento de Arquivos:** Tasks que tocam os mesmos arquivos **não podem** ser paralelizadas entre desenvolvedores. O `docs/PLAN.md` explicita os diretórios/arquivos reservados para cada task.
 - **Contratos e Configurações Compartilhadas:** Alterações em contratos Pydantic (`backend/app/schemas/`), modelos de banco (`backend/app/db/`), configurações globais (`pyproject.toml`, `package.json`, `.env.example`) só podem ocorrer por meio de **task dedicada**. Caso um Implementador identifique necessidade de alterar um contrato compartilhado fora da sua task, deve registrar o bloqueio em `docs/STATUS.md` e devolver ao Planejador.
-- **Atualização do `docs/STATUS.md`:** Feita de forma atômica no início e no fim de cada transição de task para evitar conflitos de merge.
+- **Atualização do `docs/STATUS.md`:** A versão canônica é a de `develop` (a de `main` só é atualizada no merge `develop → main`). Feita de forma atômica no início e no fim de cada transição de task para evitar conflitos de merge.
 - **Procedimento em Caso de Conflito:** O dono da branch executa `git fetch origin && git rebase origin/develop`, resolve o conflito preservando os contratos aprovados, reexecuta toda a bateria de testes e submete novamente ao Revisor. Nunca usar `--ours` ou `--theirs` cegamente.
 
 ---

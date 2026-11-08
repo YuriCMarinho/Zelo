@@ -1,0 +1,137 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { PropertyWorkspace } from './PropertyWorkspace'
+import { properties } from '../demo-data'
+import type { MaintenanceTicket, Quote } from '../contracts'
+
+const property = properties[0]!
+
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+function backend() {
+  const ticket: MaintenanceTicket = {
+    id: 'ticket-live', property_id: property.id, run_id: 'run-live',
+    reported_by_role: 'tenant', category: 'plumber', urgency: 'normal',
+    location_in_property: 'Cozinha', description: 'Vazamento na cozinha',
+    status: 'waiting_quotes', notify_tenant: false, created_at: '2026-11-08T12:00:00Z',
+  }
+  const quote: Quote = {
+    id: 'quote-live', ticket_id: ticket.id, run_id: ticket.run_id,
+    provider_id: 'provider-live', provider_name: 'Mario Encanador',
+    amount: null, status: 'requested',
+  }
+  const state = { ticket, quote, approvalFails: false, dateRefusals: 0 }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith(`/properties/${property.id}/tickets`)) return Response.json([ticket])
+    if (url.endsWith(`/tickets/${ticket.id}/quotes`)) return Response.json([quote])
+    if (url.endsWith(`/quotes/${quote.provider_id}/response`)) {
+      const body = JSON.parse(String(init?.body))
+      quote.amount = body.amount
+      quote.status = 'received'
+      ticket.status = 'awaiting_adm_approval'
+      return Response.json(ticket)
+    }
+    if (url.endsWith('/approve')) {
+      if (state.approvalFails) return Response.json({ detail: 'Aprovação recusada pelo servidor.' }, { status: 400 })
+      ticket.status = 'waiting_date_confirmation'
+      ticket.selected_provider_id = quote.provider_id
+      quote.status = 'selected'
+      return Response.json(ticket)
+    }
+    if (url.endsWith('/date-response')) {
+      const body = JSON.parse(String(init?.body))
+      if (body.accepted) {
+        ticket.status = 'resolved'
+        ticket.scheduled_date = '2026-11-10T14:00:00Z'
+      } else {
+        state.dateRefusals += 1
+        if (state.dateRefusals >= 3) ticket.status = 'escalated_to_adm'
+      }
+      return Response.json(ticket)
+    }
+    throw new Error(`Requisição inesperada: ${url}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  return { ...state, state, fetchMock }
+}
+
+it('executa o ciclo pela UI sem confirmar a visita antes do aceite do prestador', async () => {
+  const { fetchMock } = backend()
+  const user = userEvent.setup()
+  const onNewMessage = vi.fn()
+  const { rerender } = render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={onNewMessage} />)
+  await user.click(await screen.findByText('Ações do prestador (demonstração)'))
+  expect(screen.queryByRole('button', { name: /Relato de Manutenção/ })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /Prestadores respondem/ }))
+  await user.click(await screen.findByRole('button', { name: /Aprovar Mario Encanador/ }))
+  expect(screen.queryByText(/agendamento confirmado!/)).not.toBeInTheDocument()
+  await user.click(await screen.findByRole('button', { name: /Prestador recusa a data/ }))
+  expect(await screen.findByText(/O agente vai propor a próxima janela/)).toBeInTheDocument()
+  expect(screen.queryByText(/agendamento confirmado!/)).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /Prestador aceita a data/ }))
+  expect(await screen.findByText(/Orçamento aprovado e agendamento confirmado!/)).toBeInTheDocument()
+  const replies = fetchMock.mock.calls.filter(([url]) => url.endsWith('/date-response'))
+  expect(replies.map(([, init]) => JSON.parse(String(init?.body)).accepted)).toEqual([false, true])
+  // Nenhuma mensagem de confirmação é fabricada pela ação de aprovação.
+  expect(onNewMessage).not.toHaveBeenCalled()
+  rerender(<PropertyWorkspace property={property} tab="chat" messages={[]} onNewMessage={onNewMessage} />)
+  expect(await screen.findByText(/Visita marcada/)).toHaveTextContent('10 de nov às 14:00')
+})
+
+it('mantém a aprovação pendente e mostra o erro real quando o servidor recusa', async () => {
+  const { state, ticket, quote } = backend()
+  ticket.status = 'awaiting_adm_approval'
+  quote.status = 'received'
+  quote.amount = 180
+  state.approvalFails = true
+  const user = userEvent.setup()
+  render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={vi.fn()} />)
+  await user.click(await screen.findByRole('button', { name: /Aprovar Mario Encanador/ }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Aprovação recusada pelo servidor')
+  expect(screen.queryByText(/agendamento confirmado!/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Aprovar Mario Encanador/ })).toBeEnabled()
+})
+
+it('consulta respostas externas a cada 5 segundos e atualiza status e orçamento', async () => {
+  vi.useFakeTimers()
+  const { ticket, quote, fetchMock } = backend()
+  let unmount = () => {}
+  await act(async () => {
+    const view = render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={vi.fn()} />)
+    unmount = view.unmount
+  })
+  quote.status = 'received'
+  quote.amount = 275
+  ticket.status = 'awaiting_adm_approval'
+  await act(async () => { await vi.advanceTimersByTimeAsync(4999) })
+  expect(screen.queryByRole('button', { name: /Aprovar Mario/ })).not.toBeInTheDocument()
+  await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+  expect(screen.getByRole('button', { name: /Aprovar Mario/ })).toHaveTextContent('275')
+  ticket.status = 'resolved'
+  ticket.scheduled_date = '2026-11-10T14:00:00Z'
+  await act(async () => { fireEvent(window, new Event('focus')) })
+  expect(screen.getByText(/Orçamento aprovado e agendamento confirmado!/)).toBeInTheDocument()
+  const requestCount = fetchMock.mock.calls.length
+  unmount()
+  await act(async () => { await vi.advanceTimersByTimeAsync(10000); fireEvent(window, new Event('focus')) })
+  expect(fetchMock).toHaveBeenCalledTimes(requestCount)
+})
+
+it('escala ao anfitrião depois de três recusas sem anunciar uma nova proposta', async () => {
+  const { ticket } = backend()
+  ticket.status = 'waiting_date_confirmation'
+  const user = userEvent.setup()
+  render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={vi.fn()} />)
+  await user.click(await screen.findByText('Ações do prestador (demonstração)'))
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await user.click(await screen.findByRole('button', { name: /Prestador recusa a data/ }))
+    if (attempt < 2) await screen.findByText(/O agente vai propor a próxima janela/)
+  }
+  expect(await screen.findByText(/tentativas de data se esgotaram/)).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Prestador aceita a data/ })).not.toBeInTheDocument()
+})

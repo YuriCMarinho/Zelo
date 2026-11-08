@@ -1,6 +1,6 @@
 # Plano de Implementação (`PLAN.md`)
 
-Atualizado em: `2026-11-07` (fonte da verdade: `planejamento2.md`).
+Atualizado em: `2026-11-07` (Fonte única da verdade do planejamento do projeto consolidada).
 
 ---
 
@@ -60,6 +60,8 @@ flowchart TB
   N1 & N2 & NS & N3 --> LF["Langfuse + Ledger de Custo/Auditoria (run_id)"]
 ```
 
+> **Diferença em relação ao diagrama Excalidraw do time:** o diagrama manda o relato direto ao Nó 2. Este plano acrescenta o **Roteador de Entrada (R)** porque hóspede e camareira usam o mesmo chat do imóvel. O diagrama deve ser atualizado para incluir o nó R.
+
 ### Responsabilidade de Cada Nó
 
 | Nó | Agente / Componente | Responsabilidade | Uso de LLM / Grafo |
@@ -74,7 +76,7 @@ flowchart TB
 
 ### Sequência Exata do Nó 3 (Resolvedor)
 
-1. **Coleta de Orçamentos:** Consulta o PostgreSQL buscando `N` prestadores validados para a categoria e região do imóvel. *(Fallback: se o DB não tiver prestadores para a categoria/região, dispara uma coleta sob demanda do Nó S ou notifica imediatamente o ADM).* Envia pedido de orçamento (sem negociar preço) e aguarda respostas com timeout e lembrete.
+1. **Coleta de Orçamentos:** Consulta o PostgreSQL buscando `N` prestadores validados para a categoria e região do imóvel. *(Fallback assíncrono: se o DB não tiver prestadores para a categoria/região, o ticket entra em `NO_PROVIDERS_FALLBACK`, o ADM é avisado **na hora** e uma coleta sob demanda do Nó S é enfileirada. Como o Nó S espera a confirmação dos prestadores, o Nó 3 **não bloqueia**: fica em espera com timeout e só volta a `REQUESTING_QUOTES` quando houver prestador confirmado; no timeout, escala ao ADM.)* Envia pedido de orçamento (sem negociar preço) e aguarda respostas com timeout e lembrete.
 2. **Aprovação do ADM (Humano no Loop):** Notifica o ADM na **sessão Agente ⇄ Anfitrião do imóvel** com os orçamentos recebidos (em estado `interrupt` do LangGraph); o ADM seleciona o prestador e devolve a escolha ao Nó 3.
 3. **Proposta de Datas (Regra de Urgência × Agenda):** Consulta a tabela de reservas/agenda do imóvel e propõe datas ao prestador escolhido:
    - **Urgente** (ex.: vazamento de água, falta de energia elétrica): propõe a janela mais próxima possível, **mesmo com hóspede no imóvel**.
@@ -90,13 +92,13 @@ flowchart TB
 stateDiagram-v2
   [*] --> TRIAGING: Relato de Inquilino/Camareira (Roteador → Nó 2)
   TRIAGING --> TRIAGING: Pergunta de esclarecimento (dados incompletos)
-  TRIAGING --> OPEN_TICKET: Ticket Pydantic validado (aciona Nó 3)
+  TRIAGING --> OPEN: Ticket Pydantic validado (aciona Nó 3)
 
-  OPEN_TICKET --> NO_PROVIDERS_FALLBACK: 0 prestadores no DB para categoria/região
-  NO_PROVIDERS_FALLBACK --> REQUESTING_QUOTES: Coleta sob demanda (Nó S) encontrou prestadores
-  NO_PROVIDERS_FALLBACK --> ESCALATED_TO_ADM: Sem prestadores após fallback (avisa ADM)
+  OPEN --> NO_PROVIDERS_FALLBACK: 0 prestadores no DB para categoria/região
+  NO_PROVIDERS_FALLBACK --> REQUESTING_QUOTES: Nó S confirmou prestador(es) (ADM já foi avisado)
+  NO_PROVIDERS_FALLBACK --> ESCALATED_TO_ADM: Timeout da coleta sob demanda sem prestador confirmado
 
-  OPEN_TICKET --> REQUESTING_QUOTES: N prestadores encontrados no DB
+  OPEN --> REQUESTING_QUOTES: N prestadores encontrados no DB
   REQUESTING_QUOTES --> WAITING_QUOTES: Pedidos enviados (inicia timer + lembrete)
   WAITING_QUOTES --> AWAITING_ADM_APPROVAL: Orçamentos recebidos (ou timeout parcial com >=1 orçamento)
   WAITING_QUOTES --> ESCALATED_TO_ADM: Timeout total (0 respostas após lembrete)
@@ -115,14 +117,20 @@ stateDiagram-v2
   RESOLVED --> [*]
 ```
 
+> Os estados são exatamente os membros de `TicketStatus` e as setas são exatamente `TICKET_TRANSITIONS` (`backend/app/schemas/common.py`). O teste `test_ticket_transitions_match_plan_state_machine` falha se diagrama e código divergirem: mudar um exige mudar o outro na mesma task. Toda mudança de status passa por `is_valid_ticket_transition`, o que impede, por exemplo, pular a aprovação do ADM.
+
+### Contrato Nó 2 → Nó 3
+
+O Nó 2 grava o ticket no PostgreSQL (status `OPEN`) e chama `ResolverStarter.start_resolution(ResolutionRequest(ticket_id, run_id))`, definido em `backend/app/schemas/resolver.py`. O imóvel e os demais dados o Nó 3 lê do próprio ticket (fonte única). A S2-T5 usa um *fake* desse protocolo nos testes; a S2-T6 fornece a implementação (idempotente por `ticket_id`) e a anota como `ResolverStarter` em `app/`, para o `mypy app` checar a assinatura. Nenhuma das duas edita arquivos da outra.
+
 ---
 
 ## 4. Requisitos Funcionais e Não Funcionais
 
 ### Requisitos Funcionais (RF)
-- **RF1 — Ponto Único de Chat e Roteador:** Interface de chat por imóvel onde o hóspede ou a camareira envia mensagens; o roteador classifica e encaminha dúvidas comerciais ao Nó 1 e relatos de manutenção ao Nó 2.
-- **RF2 — Fluxo A (Nó 1 Comercial):** Responde dúvidas sobre o imóvel com tom acolhedor usando os dados cadastrados do imóvel e registra a reserva no PostgreSQL quando o cliente confirma.
-- **RF3 — Fluxo B (Nó S Coletor Periódico):** Job agendado no `APScheduler` que consulta Google Places API (ou fixture em dev), dispara mensagem de validação de contato, interpreta a confirmação e salva apenas prestadores validados no PostgreSQL com `run_id` próprio do job.
+- **RF1 — Ponto Único de Chat e Roteador:** Interface de chat por imóvel onde o hóspede ou a camareira envia mensagens. O papel (`reported_by_role`) vem da sessão/perfil escolhido na UI e é gravado pelo backend, nunca inferido pelo LLM a partir do texto; o roteador classifica e encaminha dúvidas comerciais ao Nó 1 e relatos de manutenção ao Nó 2.
+- **RF2 — Fluxo A (Nó 1 Comercial):** Responde dúvidas sobre o imóvel com tom acolhedor usando os dados cadastrados do imóvel e cria uma **pré-reserva** no PostgreSQL. A reserva só é confirmada por ação explícita do hóspede na UI (botão), nunca por decisão do LLM.
+- **RF3 — Fluxo B (Nó S Coletor Periódico):** Job agendado no `APScheduler` que consulta Google Places API (ou fixture em dev), dispara mensagem de validação de contato (**na demo, só para fixture, simulador ou números da allowlist dos devs**; nunca para contatos reais do Google Places sem aprovação explícita do time), interpreta a confirmação e salva apenas prestadores validados no PostgreSQL com `run_id` próprio do job.
 - **RF4 — Fluxo C / Triagem (Nó 2 Validador):** Recebe relatos de inquilinos ou camareiras, pede esclarecimentos quando necessário e produz `MaintenanceTicket` tipado em Pydantic v2 (`category`, `urgency`, `location_in_property`, `description`, `reported_by_role`).
 - **RF5 — Fluxo C / Resolução (Nó 3 Resolvedor):** Executa os 5 passos em LangGraph com persistência de estado, timeouts/lembretes, regra `urgência × agenda`, loop em caso de recusa de data e aviso ao inquilino hospedado.
 - **RF6 — Sessão Agente ⇄ Anfitrião (ADM) por Imóvel:** Área exclusiva dentro da página de cada imóvel na interface estilo Airbnb onde o ADM conversa/interage com o agente, visualiza os tickets ativos daquele imóvel, compara os orçamentos recebidos, aprova o prestador escolhido e acompanha a agenda e os alertas de timeout.
@@ -132,8 +140,10 @@ stateDiagram-v2
 - **RNF1 — Custo:** Toda chamada ao LLM define `model` e `max_tokens`, verifica tetos antes de executar e registra tokens e custo real (por `run_id`, por agente, por sprint e global). Endpoint e painel de gastos com alertas em 50%, 75% e 90% e corte automático em 100%.
 - **RNF2 — Segurança e Guardrails:**
   - *Entrada:* Todas as mensagens de hóspedes, camareiras e prestadores são tratadas como **entrada não confiável**, passando por sanitização e detecção de prompt injection antes de chegarem aos prompts principais.
+  - *Ações críticas determinísticas:* aprovar prestador, confirmar reserva e agendar data só acontecem por endpoint autenticado chamado pela UI do ADM/hóspede. Essas ações **não existem como ferramenta do LLM**; o guardrail por LLM é uma camada extra, não a garantia principal.
   - *Saída:* Validação estrita por schema Pydantic v2, filtro contra vazamento de instruções internas/dados de outros imóveis, allowlist de ferramentas por agente e allowlist de destinatários de mensagens. Segredos exclusivamente via variáveis de ambiente (`.env`).
 - **RNF3 — Privacidade e LGPD:** Telefones de prestadores e dados pessoais de hóspedes (telefone, e-mail, documento) ficam armazenados **apenas no PostgreSQL**; um redator automático mascara PII (`***`) antes de gravar qualquer log de aplicação, evento de auditoria ou trace/span enviado ao Langfuse.
+- **RNF3.1 — Base legal e retenção (LGPD):** dados de prestadores vindos do Google Places são tratados por legítimo interesse (contato comercial) e só ficam ativos após o prestador **confirmar** a mensagem de validação, que informa a finalidade e permite recusa; quem recusa ou não responde tem o contato removido. Dados de hóspedes ficam restritos ao imóvel e à reserva. Na demo, só dados fictícios ou dos próprios devs.
 - **RNF4 — Auditabilidade:** Cada ticket do Fluxo C mantém o mesmo `run_id` desde a mensagem inicial até o aviso final ao inquilino; cada execução do Nó S mantém o `run_id` do job. É possível reconstruir no painel de auditoria do ADM e no Langfuse onde o fluxo começou, por quais nós/ferramentas passou, o que decidiu e onde terminou.
 - **RNF5 — Resiliência:** Timeouts e lembretes configuráveis nas esperas por prestador e ADM; nenhum ticket fica parado sem estado visível na sessão do imóvel.
 
@@ -151,20 +161,21 @@ Relógio de referência (24h–30h):
 
 | Task | Dono | Branch | Arquivos Reservados | Objetivo, Dependências e DoD / Critérios de Aceite |
 | --- | --- | --- | --- | --- |
-| **S0-T0** | Dev 1 + Planejador / Revisor | `docs/s0-t0-planejamento-v2` | `planejamento2.md`, `docs/*.md`, `agents/*.md`, `README.md` | **Objetivo:** Consolidar o planejamento v2, criar branch `develop` e validar o Gate S0.<br>**DoD / Aceite:** `PLAN.md`, `COST.md`, `STATUS.md`, `CONTRIBUTING.md` e `agents/*.md` aprovados pelo Revisor; preços da Featherless e reserva de 30% documentados. |
+| **S0-T0** | Dev 1 + Planejador / Revisor | `docs/s0-t0-planejamento-v2` | `docs/*.md`, `agents/*.md`, `README.md` | **Objetivo:** Consolidar o planejamento único v2, criar branch `develop` e validar o Gate S0.<br>**DoD / Aceite:** `PLAN.md`, `COST.md`, `STATUS.md`, `CONTRIBUTING.md` e `agents/*.md` aprovados pelo Revisor; preços da Featherless e reserva de 30% documentados. |
 
 ---
 
 ### Sprint 1 — Fundação, Contratos, Controle de Custo e Shell Airbnb (2h–9h)
 
-*Regra de paralelismo:* **S1-T1** fecha os contratos Pydantic e modelos SQL primeiro (primeiras 2h da S1) enquanto **S1-T4** cria o frontend em paralelo. Assim que **S1-T1** é aprovada, **S1-T2** e **S1-T3** rodam 100% em paralelo em diretórios exclusivos.
+*Regra de paralelismo:* **S1-T1** fecha os contratos Pydantic e modelos SQL primeiro (primeiras 2h da S1) enquanto **S1-T4** cria o frontend em paralelo. Depois da **S1-T1**, roda a **S1-T2**. A **S1-T3** depende de T1 **e** T2 (usa cliente LLM, guardrail e mascaramento), então **não** é paralela à S1-T2. A **S1-T13** (ajuste de contratos e do corte de orçamento) precisa estar aprovada antes da S2. Ela pode rodar em paralelo à S1-T3 porque os arquivos de código são disjuntos; o único arquivo comum é `docs/STATUS.md`, atualizado de forma atômica (CONTRIBUTING §4), e quem fizer merge depois faz rebase.
 
 | Task | Dono | Branch | Arquivos Reservados | Objetivo, Requisitos, Dependências e DoD / Critérios de Aceite |
 | --- | --- | --- | --- | --- |
 | **S1-T1** | Dev 1 | `feature/s1-t1-db-contracts` | `infra/docker-compose.yml`, `backend/pyproject.toml`, `backend/app/main.py`, `backend/app/db/`, `backend/app/schemas/`, `tests/unit/test_schemas.py` | **Objetivo:** Configurar PostgreSQL no Docker Compose, modelos relacionais (Imóveis, Reservas/Agenda, Prestadores, Tickets, Orçamentos, Auditoria, Gastos) e todos os contratos Pydantic v2.<br>**Depende de:** S0-T0.<br>**DoD / Aceite:** `docker compose up -d db` sobe Postgres; schemas validam entradas/saídas de todos os nós com `run_id` obrigatório; seed inicial pré-popula 3 imóveis (estilo Airbnb), agenda de ocupação e prestadores validados; `ruff`, `mypy` e `pytest` verdes (≥70% cobertura). |
 | **S1-T2** | Dev 3 | `feature/s1-t2-llm-cost-security` | `backend/app/core/`, `backend/app/security/`, `backend/app/observability/`, `tests/unit/test_cost_and_security.py` | **Objetivo:** Implementar cliente unificado LLM (`mock` por padrão + `featherless`), controle de orçamento (tetos por `run_id`, sprint e global + alertas 50/75/90%), guardrails de entrada/saída, mascaramento LGPD (telefones/dados de hóspedes) e integração Langfuse com envio explícito de custo.<br>**Depende de:** S1-T1.<br>**DoD / Aceite:** Chamada sem `max_tokens` ou fora da tabela falha em tempo de execução; teto corta chamada ao atingir 100%; números de telefone são mascarados em logs e spans Langfuse; testes unitários de custo e prompt injection passam. |
-| **S1-T3** | Dev 4 | `feature/s1-t3-node-s-scheduler` | `backend/app/services/provider_collector.py`, `backend/app/scheduler/`, `backend/app/api/providers.py`, `tests/unit/test_node_s.py` | **Objetivo:** Implementar o **Fluxo B (Nó S)** como job periódico no `APScheduler` (e gatilho sob demanda para fallback do Nó 3) com adaptador Google Places API + fixture, envio de mensagem de validação de contato e gravação no Postgres apenas após confirmação.<br>**Depende de:** S1-T1, S1-T2.<br>**DoD / Aceite:** Job gera `run_id` próprio; prestador que não confirma contato **não** entra como ativo no DB; nenhuma mensagem é enviada fora da allowlist/simulador; testes unitários cobrem confirmação, recusa e fallback. |
+| **S1-T3** | Dev 4 | `feature/s1-t3-node-s-scheduler` | `backend/app/services/provider_collector.py`, `backend/app/scheduler/`, `backend/app/api/providers.py`, `tests/unit/test_node_s.py` | **Objetivo:** Implementar o **Fluxo B (Nó S)** como job periódico no `APScheduler` (e gatilho sob demanda, **assíncrono**, para o fallback do Nó 3), com adaptador de **fixture primeiro** (MVP) e Google Places API como extra se sobrar tempo, envio de mensagem de validação de contato e gravação no Postgres apenas após confirmação.<br>**Depende de:** S1-T1, S1-T2.<br>**DoD / Aceite:** Job gera `run_id` próprio; prestador que não confirma contato **não** entra como ativo no DB; nenhuma mensagem é enviada fora da allowlist/simulador; testes unitários cobrem confirmação, recusa e fallback; `backend/app/scheduler/` expõe um registro genérico (`register_job(...)`) que outras tasks usam **sem editar** a pasta. |
 | **S1-T4** | Dev 2 | `feature/s1-t4-frontend-airbnb-shell` | `frontend/`, `infra/frontend.Dockerfile` | **Objetivo:** Criar aplicação React + TypeScript + Vite simulando a plataforma estilo Airbnb: listagem de imóveis, página do imóvel com calendário de ocupação, aba do **Ponto Único de Chat** (hóspede/camareira), aba exclusiva da **Sessão Agente ⇄ Anfitrião (ADM)** e cabeçalho com monitor de orçamento.<br>**Depende de:** S0-T0 (paralela à S1-T1).<br>**DoD / Aceite:** `npm run lint`, `npm run typecheck`, `npm run test` (vitest) e `npm run build` limpos; navegação entre imóveis e abas funcionando com contratos tipados. |
+| **S1-T13** | Dev 1 + Planejador / Revisor | `fix/s1-t13-ticket-contract-docs` | `backend/app/schemas/common.py`, `backend/app/schemas/resolver.py`, `backend/app/schemas/__init__.py`, `backend/app/core/budget.py`, `backend/app/core/config.py`, `backend/app/core/__init__.py`, `backend/.env.example`, `tests/unit/test_schemas.py`, `tests/unit/test_cost_and_security.py`, `docs/PLAN.md`, `docs/COST.md`, `docs/CONTRIBUTING.md`, `docs/STATUS.md` (só a linha da S1-T13) | **Objetivo:** Alinhar `TicketStatus` à máquina de estados (adiciona `NO_PROVIDERS_FALLBACK` e `WAITING_QUOTES`) e codificar as transições (`TICKET_TRANSITIONS`); criar o contrato Nó 2 → Nó 3 (`ResolutionRequest` + `ResolverStarter`); fazer o corte de orçamento respeitar a reserva de 30% (`BUDGET_RESERVE_UNLOCKED`); corrigir as inconsistências dos docs.<br>**Depende de:** S1-T1, S1-T2.<br>**DoD / Aceite:** teste garante estados e transições = diagrama do PLAN; antes da S3 o corte global ocorre em US$ 17,50; `ruff`, `mypy` e `pytest` verdes; nenhuma migração de banco necessária (status é `String(50)`). |
 
 ---
 
@@ -174,9 +185,10 @@ Relógio de referência (24h–30h):
 
 | Task | Dono | Branch | Arquivos Reservados | Objetivo, Requisitos, Dependências e DoD / Critérios de Aceite |
 | --- | --- | --- | --- | --- |
-| **S2-T5** | Dev 1 | `feature/s2-t5-router-node1-node2` | `backend/app/agents/router.py`, `backend/app/agents/commercial.py`, `backend/app/agents/validator.py`, `backend/app/api/chat.py`, `tests/unit/test_router_and_triage.py` | **Objetivo:** Implementar o **Roteador Barato** do ponto único de chat, o **Nó 1 (Comercial — Fluxo A)** até a criação de reserva, e o **Nó 2 (Validador — início do Fluxo C)** para relatos de inquilino ou camareira, gerando o ticket estruturado e disparando o Nó 3.<br>**Depende de:** S1-T1, S1-T2.<br>**DoD / Aceite:** Dúvida vai ao Nó 1 e pode gerar reserva; relato de vazamento/luz (de hóspede ou camareira) vai ao Nó 2, pede esclarecimento se incompleto, cria ticket no Postgres com `run_id` único e aciona o Nó 3. |
-| **S2-T6** | Dev 3 | `feature/s2-t6-node3-langgraph-resolver` | `backend/app/agents/resolver_graph.py`, `backend/app/services/scheduling.py`, `backend/app/api/tickets.py`, `tests/unit/test_resolver_graph.py` | **Objetivo:** Implementar o **Nó 3 (Resolvedor)** em LangGraph com checkpointer PostgreSQL, `interrupt` para decisão do ADM, timeouts/lembretes no `APScheduler` e os 5 passos completos (orçamento sem negociar preço → ADM escolhe → regra `urgência × agenda` → confirmação/recusa de data com loop para o passo 3 → aviso ao inquilino se hospedado).<br>**Depende de:** S1-T1, S1-T2, S1-T3.<br>**DoD / Aceite:** Ticket urgente agenda no 1º horário livre mesmo com hóspede e gera aviso ao inquilino; ticket não urgente escolhe dia sem hóspede; recusa de data pelo prestador retorna ao passo 3; agente nunca agenda sem aprovação do ADM. |
+| **S2-T5** | Dev 1 | `feature/s2-t5-router-node1-node2` | `backend/app/agents/router.py`, `backend/app/agents/commercial.py`, `backend/app/agents/validator.py`, `backend/app/api/chat.py`, `tests/unit/test_router_and_triage.py` | **Objetivo:** Implementar o **Roteador Barato** do ponto único de chat, o **Nó 1 (Comercial — Fluxo A)** até a criação de reserva, e o **Nó 2 (Validador — início do Fluxo C)** para relatos de inquilino ou camareira, gerando o ticket estruturado no Postgres para o Nó 3.<br>**Depende de:** S1-T1, S1-T2.<br>**DoD / Aceite:** (1) Roteador aplica regra determinística de custo zero checando chamado aberto no imóvel e remetente camareira antes de chamar LLM (`Qwen3.5-4B`, 48 tokens); (2) Dúvida comercial vai ao Nó 1 (`Qwen3.5-9B`, 256 tokens), valida conflito de datas em `bookings` antes de confirmar e mantém estritamente o contrato `ChatMessageOutput`; (3) Relato de manutenção vai ao Nó 2 (`Qwen3.5-4B`, 256 tokens com `response_format` estruturado), pede esclarecimento se incompleto e cria ticket no Postgres com status `open` e `run_id` único; (4) Toda chamada ao LLM computa gasto no ledger (DB e memória); (5) Testes unitários verdes (≥70% cobertura). |
+| **S2-T6** | Dev 3 | `feature/s2-t6-node3-langgraph-resolver` | `backend/app/agents/resolver_graph.py`, `backend/app/agents/resolver_timeouts.py`, `backend/app/services/scheduling.py`, `backend/app/api/tickets.py`, `tests/unit/test_resolver_graph.py` | **Objetivo:** Implementar o **Nó 3 (Resolvedor)** em LangGraph com checkpointer PostgreSQL, `interrupt` para decisão do ADM, timeouts/lembretes registrados no `APScheduler` via `register_job` da S1-T3 (em `resolver_timeouts.py`, sem editar `backend/app/scheduler/`), implementação do `ResolverStarter` e os 5 passos completos (orçamento sem negociar preço → ADM escolhe → regra `urgência × agenda` → confirmação/recusa de data com loop para o passo 3 → aviso ao inquilino se hospedado).<br>**Depende de:** S1-T1, S1-T2, S1-T3, S1-T13.<br>**DoD / Aceite:** Ticket urgente agenda no 1º horário livre mesmo com hóspede e gera aviso ao inquilino; ticket não urgente escolhe dia sem hóspede; recusa de data pelo prestador retorna ao passo 3; agente nunca agenda sem aprovação do ADM; toda mudança de status usa `is_valid_ticket_transition`; implementação anotada como `ResolverStarter`. |
 | **S2-T7** | Dev 2 | `feature/s2-t7-frontend-integration` | `frontend/src/` | **Objetivo:** Conectar o frontend React aos endpoints FastAPI: chat unificado do imóvel (mostrando roteamento Nó 1 / Nó 2 e avisos ao inquilino), **Sessão Agente ⇄ Anfitrião (ADM)** no imóvel (comparativo de orçamentos, botão de aprovação do prestador, linha do tempo da máquina de estados), simulador de respostas de prestadores e tela de auditoria/custos.<br>**Depende de:** S1-T4, S2-T5, S2-T6.<br>**DoD / Aceite:** Fluxo completo executável pela UI; ADM aprova orçamento na sessão do imóvel e vê o ticket avançar até a confirmação do dia e aviso ao hóspede; estados de espera/timeout visíveis. |
+| **S2-T14** | Dev 3 + Revisor | `feature/s2-t14-provider-real-flow` | `backend/app/agents/resolver_graph.py`, `backend/app/agents/resolver_timeouts.py`, `backend/app/api/tickets.py`, `backend/app/schemas/resolver.py`, `backend/app/main.py`, `tests/unit/test_resolver_graph.py`, `frontend/src/api/client.ts`, `frontend/src/components/ProviderSimulator.tsx`, `frontend/src/App.tsx` | **Objetivo:** Corrigir o Fluxo C apontado na auditoria da develop: o Nó 3 deixa de simular orçamentos e devolutivas com o LLM e passa a **esperar eventos reais** (`interrupt`) do prestador/simulador, do ADM, do Nó S e dos timers.<br>**Depende de:** S1-T13 (transições), S2-T6, S2-T7.<br>**DoD / Aceite:** (1) orçamentos só existem quando o prestador responde em `POST /api/tickets/{id}/quotes/{provider_id}/response`; (2) devolutiva do dia em `POST /api/tickets/{id}/date-response` (recusa volta ao passo 3; 3 recusas escalam); (3) timeouts de orçamento, data e coleta disparam pelo APScheduler da aplicação e retomam o grafo; (4) sem prestador, o Nó S roda em segundo plano e o ticket é retomado quando surge prestador validado (ou escala no timeout); (5) aviso ao hóspede gravado (`tenant_notified`) só quando houver hóspede na data confirmada; (6) texto do prestador passa pelo guardrail; (7) toda mudança de status usa `is_valid_ticket_transition`; (8) simulador da UI responde como prestador. |
 | **S2-T8** | Dev 4 | `feature/s2-t8-integration-security-tests` | `tests/integration/`, `tests/security/` | **Objetivo:** Construir suíte completa de testes de integração (com LLM mockado) cobrindo o caminho feliz e **todos os caminhos alternativos exigidos**, além da suíte de segurança (prompt injection de hóspede, camareira e prestador + verificação LGPD).<br>**Depende de:** S2-T5, S2-T6.<br>**DoD / Aceite:** Testes verdes para: (1) nenhum prestador no DB → fallback Nó S / aviso ADM; (2) timeout de prestador; (3) timeout do ADM com lembrete; (4) prestador recusa data → volta ao passo 3; (5) urgente com hóspede vs. não urgente sem hóspede; (6) 100% da suíte de injection bloqueada. |
 
 ---

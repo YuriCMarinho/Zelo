@@ -35,7 +35,7 @@ Atuar como guardião de qualidade, segurança, arquitetura e orçamento em dois 
 ## 4. Checklist Operacional
 
 ### A. No Gate de Sprint (antes de iniciar a sprint)
-1. [ ] O plano da sprint em `docs/PLAN.md` é claro, cabe no tempo do hackathon e respeita as regras de `planejamento2.md`?
+1. [ ] O plano da sprint em `docs/PLAN.md` é claro, cabe no tempo do hackathon e respeita as regras de arquitetura consolidadas?
 2. [ ] As tasks paralelas possuem arquivos exclusivos reservados sem sobreposição?
 3. [ ] Todas as chamadas ao LLM e recursos externos estão orçados em `docs/COST.md`, preservando a reserva de 30% (US$ 7,50) para a fase final?
 4. [ ] Os critérios de aceite e caminhos alternativos de teste estão claramente definidos?
