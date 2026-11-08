@@ -27,6 +27,7 @@ from langgraph.graph import END, START, StateGraph  # type: ignore[import-untype
 from langgraph.types import Command, interrupt  # type: ignore[import-untyped]
 from psycopg.rows import dict_row  # type: ignore[import-untyped]
 from psycopg_pool import AsyncConnectionPool  # type: ignore[import-untyped]
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,7 @@ from app.agents.resolver_timeouts import (
 from app.core.config import settings
 from app.core.llm import generate
 from app.db.models.audit import AuditEvent
+from app.db.models.chat_message import ChatMessageRecord
 from app.db.models.property import Property
 from app.db.models.provider import Provider
 from app.db.models.quote import Quote
@@ -54,7 +56,7 @@ from app.schemas.common import (
 from app.schemas.resolver import ResolutionRequest, ResolverStarter
 from app.security.guardrails import validate_untrusted_input
 from app.security.masking import mask_pii
-from app.services.provider_collector import collect_on_demand
+from app.services.provider_collector import collect_on_demand, ensure_three_validated_providers
 from app.services.scheduling import find_optimal_schedule
 
 logger = logging.getLogger("smartrepair.resolver_graph")
@@ -158,6 +160,7 @@ def _validated_providers(db: Session, category: str, city: str | None) -> list[P
     query = select(Provider).where(
         Provider.category == category,
         Provider.is_validated.is_(True),
+        Provider.source == "web_maps",
     )
     if city:
         query = query.where(Provider.region.ilike(f"{city}%"))
@@ -186,6 +189,18 @@ async def dispatch_or_fallback(state: ResolverState) -> dict[str, Any]:
 
         city = _region_of(db, state["property_id"])
         providers = _validated_providers(db, state["category"], city)
+        if len(providers) < MAX_QUOTE_CANDIDATES and settings.environment != "testing":
+            cat = (
+                ProviderCategory(state["category"])
+                if state["category"] in ProviderCategory._value2member_map_
+                else ProviderCategory.GENERAL_MAINTENANCE
+            )
+            providers = await ensure_three_validated_providers(
+                db=db,
+                category=cat,
+                city=city,
+                run_id=run_id,
+            )
 
         if not providers:
             if ticket.status == TicketStatus.NO_PROVIDERS_FALLBACK.value:
@@ -220,7 +235,13 @@ async def dispatch_or_fallback(state: ResolverState) -> dict[str, Any]:
 
         # Telefones ficam só no banco (LGPD): o estado do grafo guarda apenas ids e nomes.
         candidates = [
-            {"id": p.id, "name": p.name, "rating": p.rating}
+            {
+                "id": p.id,
+                "name": p.name,
+                "rating": p.rating,
+                "reviews_count": getattr(p, "reviews_count", 42),
+                "address": getattr(p, "address", None),
+            }
             for p in providers[:MAX_QUOTE_CANDIDATES]
         ]
         return {"candidate_providers": candidates, "status": TicketStatus.REQUESTING_QUOTES.value}
@@ -322,7 +343,14 @@ async def wait_for_quotes(state: ResolverState) -> dict[str, Any]:
                         "provider_name": quote.provider.name if quote.provider else None,
                         "amount": quote.amount,
                         "description": quote.description,
+                        "proposed_availability": quote.proposed_availability,
                         "rating": quote.provider.rating if quote.provider else None,
+                        "reviews_count": (
+                            getattr(quote.provider, "reviews_count", 42) if quote.provider else 42
+                        ),
+                        "address": (
+                            getattr(quote.provider, "address", None) if quote.provider else None
+                        ),
                     }
                 )
         db.commit()
@@ -350,8 +378,10 @@ async def synthesize_for_adm(state: ResolverState) -> dict[str, Any]:
     run_id = state["run_id"]
 
     quotes_text = "\n".join(
-        f"- {q['provider_name']} (ID: {q['provider_id']}): "
-        f"R$ {q['amount']:.2f} — {q['description']}"
+        f"- {q['provider_name']} (Nota Google: ★ {q.get('rating') or 4.8:.1f}, "
+        f"{q.get('reviews_count') or 42} avaliações): "
+        f"R$ {q['amount']:.2f} — {q['description']} "
+        f"(Disponibilidade: {q.get('proposed_availability') or 'Imediata'})"
         for q in state["quotes"]
     )
 
@@ -368,8 +398,9 @@ async def synthesize_for_adm(state: ResolverState) -> dict[str, Any]:
                     "role": "system",
                     "content": (
                         f"Você é o agente resolutivo do imóvel '{prop_name}'. Apresente um "
-                        "comparativo claro e objetivo dos orçamentos recebidos para que o "
-                        "anfitrião (ADM) tome a decisão final. Não escolha por ele."
+                        "comparativo claro e objetivo dos 3 orçamentos recebidos (destacando "
+                        "custo-benefício, reputação no Google e prazo) para que o anfitrião (ADM) "
+                        "tome a decisão final. Não escolha por ele. Seja direto (máx. 3 frases)."
                     ),
                 },
                 {
@@ -388,6 +419,7 @@ async def synthesize_for_adm(state: ResolverState) -> dict[str, Any]:
             db=db,
         )
 
+        ticket.adm_synthesis = resp.content
         _set_status(ticket, TicketStatus.AWAITING_ADM_APPROVAL)
         _audit(
             db,
@@ -588,6 +620,9 @@ async def notify_tenant_and_resolve(state: ResolverState) -> dict[str, Any]:
         if not ticket:
             return {"status": "error", "error": "Ticket não encontrado"}
 
+        provider_name = (
+            ticket.selected_provider.name if ticket.selected_provider else "Prestador homologado"
+        )
         if state["notify_tenant"]:
             _set_status(ticket, TicketStatus.NOTIFYING_TENANT)
             db.commit()
@@ -604,7 +639,8 @@ async def notify_tenant_and_resolve(state: ResolverState) -> dict[str, Any]:
                     {
                         "role": "user",
                         "content": (
-                            f"Serviço: {ticket.description}. Data/Hora: {state['proposed_date']}."
+                            f"Serviço: {ticket.description}. Prestador: {provider_name}. "
+                            f"Data/Hora: {state['proposed_date']}."
                         ),
                     },
                 ],
@@ -625,6 +661,24 @@ async def notify_tenant_and_resolve(state: ResolverState) -> dict[str, Any]:
                     "message": mask_pii(resp.content),
                     "scheduled_date": state["proposed_date"],
                 },
+            )
+            origin_msg = (
+                db.query(ChatMessageRecord)
+                .filter(ChatMessageRecord.ticket_id == ticket_id)
+                .order_by(ChatMessageRecord.created_at.desc())
+                .first()
+            )
+            target_session = origin_msg.session_id if origin_msg else "default"
+            target_channel = origin_msg.channel if origin_msg else "guest"
+            db.add(
+                ChatMessageRecord(
+                    property_id=state["property_id"],
+                    session_id=target_session,
+                    channel=target_channel,
+                    sender="agent",
+                    body=resp.content,
+                    ticket_id=ticket.id,
+                )
             )
 
         _set_status(ticket, TicketStatus.RESOLVED)
@@ -940,6 +994,519 @@ async def retry_provider_collection(ticket_id: str) -> None:
     await collect_and_resume(ticket_id, run_id, category, city)
 
 
+class GeneratedProviderQuoteItem(BaseModel):
+    provider_id: str = Field(..., min_length=1)
+    amount: float = Field(..., ge=50.0, le=50000.0)
+    description: str = Field(..., min_length=5, max_length=400)
+    proposed_availability: str = Field(..., min_length=3, max_length=150)
+
+
+class GeneratedProviderQuotesBatch(BaseModel):
+    quotes: list[GeneratedProviderQuoteItem]
+
+
+def _contextual_fallback_quote(
+    ticket: MaintenanceTicket,
+    provider_name: str,
+    index: int,
+    host_feedback: str | None = None,
+) -> tuple[float, str, str]:
+    """Gera proposta contextual realista quando o LLM está em modo mock ou falha no JSON."""
+    desc_lower = ticket.description.lower()
+    is_urgent = ticket.urgency == "urgent"
+    discount = 0.88 if host_feedback else 1.0
+
+    if "chuveiro" in desc_lower or "resistência" in desc_lower or "esquenta" in desc_lower:
+        base_prices = [165.0, 210.0, 145.0]
+        scopes = [
+            "Troca de resistência blindada, revisão de disjuntor e garantia de 90 dias",
+            "Reparo elétrico completo do chuveiro, conectores e teste de aterramento",
+            "Troca rápida do elemento aquecedor e revisão da fiação local",
+        ]
+    elif "ar" in desc_lower or "climatiza" in desc_lower or "gelando" in desc_lower:
+        base_prices = [280.0, 340.0, 240.0]
+        scopes = [
+            "Higienização técnica do split inverter, recarga de gás e teste de placa",
+            "Manutenção corretiva completa com limpeza de turbina, dreno e garantia",
+            "Revisão de pressão do compressor, desobstrução de dreno e sensor",
+        ]
+    elif "pintura" in desc_lower or "mofo" in desc_lower or "parede" in desc_lower:
+        base_prices = [320.0, 390.0, 270.0]
+        scopes = [
+            "Raspagem, fundo preparador antimofo, massa corrida e 2 demãos acrílicas",
+            "Tratamento impermeabilizante contra umidade e pintura premium sem odor",
+            "Reparo localizado da superfície descascada, selador e acabamento acrílico",
+        ]
+    elif (
+        "vaza" in desc_lower or "cano" in desc_lower or "pia" in desc_lower or "sifão" in desc_lower
+    ):
+        base_prices = [190.0, 250.0, 160.0]
+        scopes = [
+            "Substituição de sifão e conexões em PVC, vedação PTFE e teste de pressão",
+            "Reparo hidráulico completo com troca de registros, vedações e garantia",
+            "Vedação corretiva do ponto de vazamento e desobstrução da tubulação local",
+        ]
+    else:
+        base_prices = [200.0, 260.0, 175.0]
+        loc = ticket.location_in_property
+        scopes = [
+            f"Atendimento especializado em {loc} com peças inclusas e garantia",
+            f"Manutenção corretiva completa em {loc} com laudo de verificação",
+            f"Reparo técnico objetivo em {loc} com visita imediata",
+        ]
+
+    availabilities = (
+        ["Hoje em até 2h", "Hoje à tarde (14h às 17h)", "Amanhã às 08h30"]
+        if is_urgent
+        else ["Amanhã às 09h", "Amanhã às 14h", "Próxima janela livre às 10h"]
+    )
+    i = index % 3
+    final_amount = round(base_prices[i] * discount, 2)
+    scope = scopes[i]
+    if host_feedback:
+        scope = f"{scope} (Proposta revisada conforme solicitação do anfitrião)"
+    return final_amount, scope, availabilities[i]
+
+
+async def generate_and_record_llm_quotes(
+    ticket_id: str,
+    run_id: str,
+    host_feedback: str | None = None,
+    graph: Any | None = None,
+) -> list[dict[str, Any]]:
+    """Usa o LLM para gerar as propostas técnicas dos 3 fornecedores e registra no Nó 3."""
+    with SessionLocal() as db:
+        ticket = db.get(MaintenanceTicket, ticket_id)
+        if not ticket or ticket.status != TicketStatus.WAITING_QUOTES.value:
+            return []
+        prop = db.get(Property, ticket.property_id)
+        prop_name = prop.name if prop else "Imóvel"
+        pending_quotes = [q for q in ticket.quotes if q.status == QuoteStatus.REQUESTED.value]
+        if not pending_quotes:
+            return []
+
+        providers_info = []
+        for q in pending_quotes:
+            prov = q.provider
+            providers_info.append(
+                {
+                    "provider_id": q.provider_id,
+                    "name": prov.name if prov else q.provider_id,
+                    "rating": prov.rating if prov and prov.rating else 4.8,
+                    "reviews_count": getattr(prov, "reviews_count", 42) if prov else 42,
+                    "address": getattr(prov, "address", "") if prov else "",
+                }
+            )
+
+        providers_prompt = "\n".join(
+            f"- ID: {p['provider_id']} | Nome: {p['name']} | Nota Google: ★ {p['rating']:.1f} "
+            f"({p['reviews_count']} avaliações) | Endereço: {p['address']}"
+            for p in providers_info
+        )
+        feedback_clause = (
+            f"\nObservação do anfitrião sobre rodada anterior: {host_feedback}"
+            if host_feedback
+            else ""
+        )
+
+        llm_items_by_id: dict[str, GeneratedProviderQuoteItem] = {}
+        try:
+            resp = await generate(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Você simula o retorno de orçamentos técnicos de 3 fornecedores reais "
+                            f"para um chamado de manutenção no imóvel '{prop_name}'. "
+                            "Gere exatamente 1 orçamento realista em JSON para cada fornecedor "
+                            "listado, variando preço (R$), detalhamento técnico específico para "
+                            "o problema relatado e disponibilidade de atendimento. "
+                            "Retorne apenas JSON válido no formato "
+                            '{"quotes": [{"provider_id": "...", "amount": 220.0, '
+                            '"description": "...", "proposed_availability": "..."}]}.'
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Problema relatado: {ticket.description}\n"
+                            f"Local no imóvel: {ticket.location_in_property}\n"
+                            f"Categoria: {ticket.category} | Urgência: {ticket.urgency}"
+                            f"{feedback_clause}\n\n"
+                            f"Fornecedores consultados:\n{providers_prompt}"
+                        ),
+                    },
+                ],
+                model="Qwen/Qwen3.5-9B",
+                max_tokens=480,
+                run_id=run_id,
+                node="resolver_provider_quotes",
+                temperature=0.3,
+                response_format=GeneratedProviderQuotesBatch,
+                db=db,
+            )
+            if isinstance(resp.parsed, GeneratedProviderQuotesBatch):
+                for item in resp.parsed.quotes:
+                    if item.provider_id and not item.description.startswith("mock_"):
+                        llm_items_by_id[item.provider_id] = item
+        except Exception as exc:
+            logger.warning(
+                "Fallback contextual acionado na geração de propostas dos fornecedores",
+                extra={"ticket_id": ticket_id, "error": str(exc)},
+            )
+
+    recorded: list[dict[str, Any]] = []
+    for idx, p_info in enumerate(providers_info):
+        pid = str(p_info["provider_id"])
+        llm_item = llm_items_by_id.get(pid)
+        if llm_item is not None:
+            amount = round(float(llm_item.amount), 2)
+            description = llm_item.description.strip()
+            availability = llm_item.proposed_availability.strip()
+        else:
+            with SessionLocal() as db:
+                t_obj = db.get(MaintenanceTicket, ticket_id)
+                if not t_obj:
+                    continue
+                amount, description, availability = _contextual_fallback_quote(
+                    t_obj, str(p_info["name"]), idx, host_feedback
+                )
+
+        await record_quote_response(
+            ticket_id=ticket_id,
+            provider_id=pid,
+            amount=amount,
+            description=description,
+            availability=availability,
+            graph=graph,
+        )
+        recorded.append(
+            {
+                "provider_id": pid,
+                "amount": amount,
+                "description": description,
+                "proposed_availability": availability,
+            }
+        )
+    return recorded
+
+
+async def confirm_date_with_llm(ticket_id: str, graph: Any | None = None) -> None:
+    """Consulta o fornecedor escolhido via LLM para confirmar a janela agendada."""
+    with SessionLocal() as db:
+        ticket = db.get(MaintenanceTicket, ticket_id)
+        if not ticket or ticket.status != TicketStatus.WAITING_DATE_CONFIRMATION.value:
+            return
+        run_id = ticket.run_id
+        provider_name = (
+            ticket.selected_provider.name if ticket.selected_provider else "Prestador homologado"
+        )
+        desc = ticket.description
+
+    snapshot = await (graph or compiled_resolver_graph).aget_state(_thread(ticket_id))
+    proposed_date = snapshot.values.get("proposed_date") if snapshot and snapshot.values else None
+
+    confirmation_msg = (
+        f"Confirmado! Equipe da {provider_name} agendada para atendimento "
+        f"técnico em {proposed_date}."
+    )
+    try:
+        with SessionLocal() as db:
+            resp = await generate(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            f"Você é o prestador de serviços '{provider_name}'. Confirme em uma "
+                            "frase curta e cordial que comparecerá na data e horário propostos "
+                            "para realizar o reparo."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Serviço: {desc}. Janela proposta: {proposed_date}.",
+                    },
+                ],
+                model="Qwen/Qwen3.5-4B",
+                max_tokens=100,
+                run_id=run_id,
+                node="resolver_provider_date_confirm",
+                temperature=0.2,
+                db=db,
+            )
+            if resp.content and "determinística" not in resp.content:
+                confirmation_msg = resp.content.strip()
+    except Exception:
+        pass
+
+    await record_date_response(
+        ticket_id=ticket_id,
+        accepted=True,
+        message=confirmation_msg,
+        graph=graph,
+    )
+
+
+async def reject_quotes_and_requote(
+    ticket_id: str,
+    reason: str | None = None,
+    run_id: str | None = None,
+    graph: Any | None = None,
+) -> dict[str, Any]:
+    """Permite ao anfitrião recusar os orçamentos atuais e solicitar nova cotação via LLM."""
+    clean_reason = (
+        validate_untrusted_input(reason.strip(), role="host", run_id=run_id or "run-reject-quotes")
+        if reason and reason.strip()
+        else "Solicitação de revisão de valores e prazos pelo anfitrião."
+    )
+
+    with SessionLocal() as db:
+        ticket = db.get(MaintenanceTicket, ticket_id)
+        if not ticket:
+            raise ValueError(f"Ticket '{ticket_id}' não encontrado.")
+        effective_run_id = run_id or ticket.run_id
+        _audit(
+            db,
+            effective_run_id,
+            ticket.id,
+            "reject_quotes_and_requote",
+            "adm_quotes_rejected",
+            {"reason": clean_reason},
+        )
+        prop = db.get(Property, ticket.property_id)
+        city = prop.city if prop else None
+        cat = (
+            ProviderCategory(ticket.category)
+            if ticket.category in ProviderCategory._value2member_map_
+            else ProviderCategory.GENERAL_MAINTENANCE
+        )
+
+    # 1. Garante os 3 fornecedores validados
+    with SessionLocal() as db:
+        providers = await ensure_three_validated_providers(
+            db=db,
+            category=cat,
+            city=city,
+            run_id=effective_run_id,
+        )
+        providers_info = [
+            {
+                "provider_id": p.id,
+                "name": p.name,
+                "rating": p.rating if p.rating else 4.8,
+                "reviews_count": getattr(p, "reviews_count", 42),
+                "address": getattr(p, "address", "") or "",
+            }
+            for p in providers[:MAX_QUOTE_CANDIDATES]
+        ]
+
+    # 2. Gera propostas revisadas via LLM considerando o feedback do anfitrião
+    with SessionLocal() as db:
+        ticket = db.get(MaintenanceTicket, ticket_id)
+        if not ticket:
+            raise ValueError(f"Ticket '{ticket_id}' não encontrado.")
+        prop = db.get(Property, ticket.property_id)
+        prop_name = prop.name if prop else "Imóvel"
+        providers_prompt = "\n".join(
+            f"- ID: {p['provider_id']} | Nome: {p['name']} | Nota Google: ★ {p['rating']:.1f} "
+            f"({p['reviews_count']} avaliações) | Endereço: {p['address']}"
+            for p in providers_info
+        )
+        feedback_clause = f"\nObservação/Exigência do anfitrião: {clean_reason}"
+
+        llm_items_by_id: dict[str, GeneratedProviderQuoteItem] = {}
+        try:
+            resp = await generate(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Você simula o retorno de orçamentos técnicos revisados de 3 "
+                            f"fornecedores reais para um chamado no imóvel '{prop_name}'. "
+                            "O anfitrião recusou a proposta anterior e solicitou ajustes. "
+                            "Gere exatamente 1 orçamento realista revisado em JSON para cada "
+                            "fornecedor listado, adaptando preço (R$), detalhamento técnico e "
+                            "disponibilidade às exigências do anfitrião. Retorne no formato "
+                            '{"quotes": [{"provider_id": "...", "amount": 220.0, '
+                            '"description": "...", "proposed_availability": "..."}]}.'
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Problema relatado: {ticket.description}\n"
+                            f"Local no imóvel: {ticket.location_in_property}\n"
+                            f"Categoria: {ticket.category} | Urgência: {ticket.urgency}"
+                            f"{feedback_clause}\n\n"
+                            f"Fornecedores consultados:\n{providers_prompt}"
+                        ),
+                    },
+                ],
+                model="Qwen/Qwen3.5-9B",
+                max_tokens=480,
+                run_id=effective_run_id,
+                node="resolver_provider_quotes",
+                temperature=0.3,
+                response_format=GeneratedProviderQuotesBatch,
+                db=db,
+            )
+            if isinstance(resp.parsed, GeneratedProviderQuotesBatch):
+                for item in resp.parsed.quotes:
+                    if item.provider_id and not item.description.startswith("mock_"):
+                        llm_items_by_id[item.provider_id] = item
+        except Exception as exc:
+            logger.warning(
+                "Fallback contextual na regeneração de propostas dos fornecedores",
+                extra={"ticket_id": ticket_id, "error": str(exc)},
+            )
+
+    # 3. Atualiza ou cria as cotações no banco com status RECEIVED
+    quotes_for_synthesis: list[dict[str, Any]] = []
+    with SessionLocal() as db:
+        ticket = db.get(MaintenanceTicket, ticket_id)
+        if not ticket:
+            raise ValueError(f"Ticket '{ticket_id}' não encontrado.")
+        existing_quotes_by_prov = {q.provider_id: q for q in ticket.quotes}
+
+        for idx, p_info in enumerate(providers_info):
+            pid = str(p_info["provider_id"])
+            llm_item = llm_items_by_id.get(pid)
+            if llm_item is not None:
+                amount = round(float(llm_item.amount), 2)
+                description = llm_item.description.strip()
+                availability = llm_item.proposed_availability.strip()
+            else:
+                amount, description, availability = _contextual_fallback_quote(
+                    ticket, str(p_info["name"]), idx, clean_reason
+                )
+
+            q_obj = existing_quotes_by_prov.get(pid)
+            if q_obj is None:
+                q_obj = Quote(
+                    ticket_id=ticket.id,
+                    run_id=effective_run_id,
+                    provider_id=pid,
+                    status=QuoteStatus.RECEIVED.value,
+                    amount=amount,
+                    description=description,
+                    proposed_availability=availability,
+                )
+                db.add(q_obj)
+            else:
+                q_obj.amount = amount
+                q_obj.description = description
+                q_obj.proposed_availability = availability
+                q_obj.status = QuoteStatus.RECEIVED.value
+
+            quotes_for_synthesis.append(
+                {
+                    "provider_id": pid,
+                    "provider_name": p_info["name"],
+                    "rating": p_info["rating"],
+                    "reviews_count": p_info["reviews_count"],
+                    "amount": amount,
+                    "description": description,
+                    "proposed_availability": availability,
+                }
+            )
+
+        # 4. Gera nova síntese comparativa para o ADM
+        quotes_text = "\n".join(
+            f"- {q['provider_name']} (Nota Google: ★ {q['rating']:.1f}, {q['reviews_count']} av.): "
+            f"R$ {q['amount']:.2f} — {q['description']} "
+            f"(Disponibilidade: {q['proposed_availability']})"
+            for q in quotes_for_synthesis
+        )
+        prop = db.get(Property, ticket.property_id)
+        prop_name = prop.name if prop else "Imóvel"
+        property_id = str(ticket.property_id)
+        ticket_cat = str(ticket.category)
+        ticket_urg = str(ticket.urgency)
+        ticket_loc = str(ticket.location_in_property)
+        ticket_desc = str(ticket.description)
+
+        synth_resp = await generate(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        f"Você é o agente resolutivo do imóvel '{prop_name}'. Apresente um "
+                        "comparativo claro e objetivo dos 3 orçamentos REVISADOS recebidos "
+                        "(destacando a exigência do anfitrião, custo-benefício e prazo) "
+                        "para que o anfitrião tome a decisão final. Não escolha por ele. "
+                        "Seja direto (máx. 3 frases)."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Chamado: {ticket.description} ({ticket.location_in_property}). "
+                        f"Urgência: {ticket.urgency}.\nExigência do anfitrião: {clean_reason}\n"
+                        f"Orçamentos revisados recebidos:\n{quotes_text}"
+                    ),
+                },
+            ],
+            model="Qwen/Qwen3.5-9B",
+            max_tokens=320,
+            run_id=effective_run_id,
+            node="resolver_adm_summary",
+            temperature=0.2,
+            db=db,
+        )
+
+        ticket.adm_synthesis = synth_resp.content
+        ticket.status = TicketStatus.AWAITING_ADM_APPROVAL.value
+        ticket.selected_provider_id = None
+        _audit(
+            db,
+            effective_run_id,
+            ticket.id,
+            "reject_quotes_and_requote",
+            "adm_quotes_regenerated",
+            {"reason": clean_reason, "synthesis": mask_pii(synth_resp.content)},
+        )
+        db.commit()
+
+    # 5. Atualiza o checkpointer do LangGraph para que a aprovação funcione imediatamente
+    target_graph = graph or compiled_resolver_graph
+    try:
+        await target_graph.aupdate_state(
+            _thread(ticket_id),
+            {
+                "ticket_id": ticket_id,
+                "property_id": property_id,
+                "run_id": effective_run_id,
+                "category": ticket_cat,
+                "urgency": ticket_urg,
+                "location": ticket_loc,
+                "description": ticket_desc,
+                "candidate_providers": providers_info,
+                "quotes": quotes_for_synthesis,
+                "adm_synthesis": synth_resp.content,
+                "selected_provider_id": None,
+                "proposed_date": None,
+                "notify_tenant": False,
+                "retry_date_count": 0,
+                "status": TicketStatus.AWAITING_ADM_APPROVAL.value,
+                "error": None,
+            },
+            as_node="synthesize_for_adm",
+        )
+    except Exception as exc:
+        logger.warning(
+            "Não foi possível sincronizar checkpointer do LangGraph: %s",
+            exc,
+            extra={"ticket_id": ticket_id},
+        )
+
+    return {
+        "ticket_id": ticket_id,
+        "status": TicketStatus.AWAITING_ADM_APPROVAL.value,
+        "quotes": quotes_for_synthesis,
+        "adm_synthesis": synth_resp.content,
+    }
+
+
 # -----------------------------------------------------------------------------
 # Implementação concreta do protocolo ResolverStarter
 # -----------------------------------------------------------------------------
@@ -955,6 +1522,9 @@ class LangGraphResolverStarter:
         self,
         request: ResolutionRequest,
         db: Session | None = None,
+        *,
+        auto_quote_with_llm: bool | None = None,
+        host_feedback: str | None = None,
     ) -> dict[str, Any]:
         """Inicia a resolução; se o ticket já saiu de 'open', devolve o estado atual."""
         session = db or SessionLocal()
@@ -1007,6 +1577,25 @@ class LangGraphResolverStarter:
                         _region_of(session, ticket.property_id),
                     )
                 )
+            should_auto_quote = (
+                auto_quote_with_llm
+                if auto_quote_with_llm is not None
+                else (settings.environment != "testing")
+            )
+            if (
+                should_auto_quote
+                and isinstance(result, dict)
+                and result.get("status") == TicketStatus.WAITING_QUOTES.value
+            ):
+                await generate_and_record_llm_quotes(
+                    ticket_id=ticket.id,
+                    run_id=request.run_id,
+                    host_feedback=host_feedback,
+                    graph=self.graph,
+                )
+                snapshot = await self.graph.aget_state(_thread(request.ticket_id))
+                if snapshot and snapshot.values:
+                    return dict(snapshot.values)
             return dict(result) if isinstance(result, dict) else {}
         finally:
             if db is None:

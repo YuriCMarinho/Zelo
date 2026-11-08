@@ -232,7 +232,7 @@ export function ChatPanel({
             aria-pressed={role === 'camareira'}
             onClick={() => setRole('camareira')}
           >
-            Camareira
+            Vistoria
           </button>
         </div>
       </div>

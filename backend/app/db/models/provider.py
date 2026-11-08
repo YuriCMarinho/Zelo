@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, String
+from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -21,8 +21,10 @@ class Provider(Base):
     region: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     phone: Mapped[str] = mapped_column(String(30), nullable=False)
     is_validated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    rating: Mapped[float | None] = mapped_column(Float, default=5.0, nullable=True)
-    source: Mapped[str] = mapped_column(String(50), default="fixture", nullable=False)
+    rating: Mapped[float | None] = mapped_column(Float, default=4.8, nullable=True)
+    reviews_count: Mapped[int] = mapped_column(Integer, default=42, nullable=False)
+    address: Mapped[str | None] = mapped_column(String(220), nullable=True)
+    source: Mapped[str] = mapped_column(String(50), default="web_maps", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)

@@ -4,12 +4,15 @@ Garante que todos os spans e traces injetem run_id como trace_id, mascarem PII
 e registrem uso de tokens e custo explícito calculado em USD.
 """
 
+import hashlib
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.core.budget import MODEL_PRICING
 from app.core.config import settings
 from app.security.masking import mask_dict_pii, mask_pii
 
@@ -56,7 +59,7 @@ class LangfuseClientWrapper:
             self._client = Langfuse(
                 public_key=settings.langfuse_public_key,
                 secret_key=settings.langfuse_secret_key,
-                host=settings.langfuse_host,
+                base_url=settings.langfuse_host,
             )
             logger.info("Cliente Langfuse conectado com sucesso.")
         except Exception as exc:
@@ -107,24 +110,61 @@ class LangfuseClientWrapper:
         # Se houver cliente Langfuse real ativo, envia span com custo explícito
         if self._client is not None and not offline_only:
             try:
-                trace = self._client.trace(id=run_id, name=f"run-{run_id}")
-                trace.generation(
-                    name=f"node-{node}",
-                    model=model,
-                    input=masked_input,
-                    output=masked_output,
-                    usage={
-                        "input": input_tokens,
-                        "output": output_tokens,
-                        "total": total_tokens,
-                        "unit": "TOKENS",
-                    },
-                    usage_details={
-                        "input_cost": (cost_usd * (input_tokens / max(1, total_tokens))),
-                        "output_cost": (cost_usd * (output_tokens / max(1, total_tokens))),
-                        "total_cost": cost_usd,
-                    },
+                # Gera trace_id válido no formato W3C (32 caracteres hexadecimais minúsculos)
+                if len(run_id) == 32 and re.match(r"^[0-9a-f]{32}$", run_id):
+                    trace_id = run_id
+                elif hasattr(self._client, "create_trace_id"):
+                    trace_id = self._client.create_trace_id(seed=run_id)
+                else:
+                    trace_id = hashlib.sha256(run_id.encode("utf-8")).digest()[:16].hex()
+
+                pricing = MODEL_PRICING.get(
+                    model, MODEL_PRICING.get("mock", {"input": 0.0, "output": 0.0})
                 )
+                input_cost = round((input_tokens * pricing["input"]) / 1_000_000.0, 8)
+                output_cost = round((output_tokens * pricing["output"]) / 1_000_000.0, 8)
+                total_cost = round(input_cost + output_cost, 8)
+                if cost_usd > 0.0 and total_cost == 0.0:
+                    total_cost = cost_usd
+
+                usage_details = {
+                    "input": input_tokens,
+                    "output": output_tokens,
+                    "total": total_tokens,
+                }
+                cost_details = {
+                    "input": input_cost,
+                    "output": output_cost,
+                    "total": total_cost,
+                }
+
+                if hasattr(self._client, "start_observation"):
+                    obs = self._client.start_observation(
+                        name=f"node-{node}",
+                        as_type="generation",
+                        trace_context={"trace_id": trace_id},
+                        model=model,
+                        input=masked_input,
+                        output=masked_output,
+                        usage_details=usage_details,
+                        cost_details=cost_details,
+                        metadata={
+                            "run_id": run_id,
+                            "node": node,
+                            "is_mock": is_mock,
+                        },
+                    )
+                    obs.end()
+                elif hasattr(self._client, "trace"):
+                    trace = self._client.trace(id=trace_id, name=f"run-{run_id}")
+                    trace.generation(
+                        name=f"node-{node}",
+                        model=model,
+                        input=masked_input,
+                        output=masked_output,
+                        usage_details=usage_details,
+                        cost_details=cost_details,
+                    )
             except Exception as exc:
                 logger.warning(
                     "Falha ao enviar geração ao Langfuse; mantido no buffer local.",
@@ -132,6 +172,14 @@ class LangfuseClientWrapper:
                 )
 
         return span
+
+    def flush(self) -> None:
+        """Força o envio de spans pendentes no buffer do Langfuse."""
+        if self._client is not None and hasattr(self._client, "flush"):
+            try:
+                self._client.flush()
+            except Exception as exc:
+                logger.warning("Falha ao executar flush no Langfuse: %s", exc)
 
     def get_recorded_traces(self) -> list[SpanRecord]:
         """Retorna todos os spans/gerações registrados em memória."""

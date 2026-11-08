@@ -10,6 +10,7 @@ from typing import Final
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.llm import generate
 from app.db.models import MaintenanceTicket
 from app.schemas.common import ReportedByRole, RouteDestination, TicketStatus
@@ -256,7 +257,7 @@ async def route_chat_message(
 
     llm_resp = await generate(
         messages=messages,
-        model="Qwen/Qwen3.5-4B",
+        model=settings.llm_model_router,
         max_tokens=48,
         run_id=run_id,
         node="router",

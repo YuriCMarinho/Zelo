@@ -16,7 +16,6 @@ const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'visao-geral', label: 'Visão geral' },
   { id: 'chat', label: 'Chat do imóvel' },
   { id: 'adm', label: 'Agente ⇄ Anfitrião' },
-  { id: 'orcamentos', label: 'Orçamentos' },
 ]
 
 function ZeloMark({ size = 40, transparent = false }: { size?: number; transparent?: boolean }) {
@@ -296,102 +295,6 @@ function Overview({ property, navigate }: { property: Property; navigate: (url: 
   )
 }
 
-const sampleQuotes = [
-  { id: 'carlos', name: 'Carlos Eletricista', rating: '4,9 · 128 avaliações', price: 180, when: 'Amanhã, 9h', note: 'Recomendado' },
-  { id: 'volt', name: 'Volt Reparos', rating: '4,7 · 64 avaliações', price: 240, when: 'Hoje, 17h', note: '' },
-  { id: 'joao', name: 'João Faz-Tudo', rating: '4,5 · 21 avaliações', price: 150, when: 'Sexta, 14h', note: '' },
-] as const
-
-function QuotesPanel({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
-  const [selected, setSelected] = useState<string>('carlos')
-  const [confirmed, setConfirmed] = useState(false)
-  const choice = sampleQuotes.find((quote) => quote.id === selected) ?? sampleQuotes[0]
-  return (
-    <section className="quotes-layout" aria-labelledby="quotes-heading">
-      <div className="quotes-main">
-        <div
-          style={{
-            background: 'var(--mar-08)',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            marginBottom: '16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <span>
-            Simulação rápida de comparativo. Para aprovar chamados reais dos agentes, acesse{' '}
-            <strong>Agente ⇄ Anfitrião</strong>.
-          </span>
-          <button
-            type="button"
-            className="action-primary"
-            style={{ padding: '6px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
-            onClick={() => navigate(propertyUrl(property.id, 'adm'))}
-          >
-            Ir para Agente ⇄ Anfitrião ↗
-          </button>
-        </div>
-        <div className="quotes-intro">
-          <span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span>
-          <h2 id="quotes-heading">Chuveiro sem água quente</h2>
-          <p>3 de 5 eletricistas consultados enviaram orçamento. O hóspede já foi informado do acompanhamento.</p>
-        </div>
-        <div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">
-          {sampleQuotes.map((quote) => (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={selected === quote.id}
-              key={quote.id}
-              className={`quote-card ${selected === quote.id ? 'selected' : ''}`}
-              onClick={() => {
-                setSelected(quote.id)
-                setConfirmed(false)
-              }}
-            >
-              <span className="quote-card-top">
-                <span>
-                  <strong>{quote.name}</strong>
-                  <small>
-                    {quote.rating}
-                    {quote.note ? ` · ${quote.note}` : ''}
-                  </small>
-                </span>
-                <b className="tabular-nums">{money(quote.price)}</b>
-              </span>
-              <span className="quote-time">{quote.when}</span>
-            </button>
-          ))}
-        </div>
-        <div className="quote-action">
-          <button type="button" onClick={() => setConfirmed(true)}>
-            {confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}
-          </button>
-          <p>Simulação local: nenhuma contratação ou agendamento é realizado.</p>
-        </div>
-      </div>
-      <aside className="quotes-aside">
-        <h3>Como funciona a aprovação</h3>
-        <p>O Nó 3 coleta cotações sem negociar preço e pausa até sua escolha explícita antes de agendar a visita.</p>
-        <div className="quote-steps">
-          <span>
-            1. <strong>Orçamentos recebidos</strong>
-          </span>
-          <span>
-            2. <strong>Sua aprovação</strong>
-          </span>
-          <span>
-            3. <strong>Agendamento na janela ideal</strong>
-          </span>
-        </div>
-      </aside>
-    </section>
-  )
-}
-
 function getPropertyState(property: Property): string {
   const loc = `${property.location} ${property.neighborhood} ${property.id}`.toLowerCase()
   if (loc.includes('recife') || loc.includes('pernambuco') || loc.includes('portodigital')) return 'PERNAMBUCO'
@@ -478,10 +381,13 @@ function PropertyPage({
       <div className="tab-content" key={property.id}>
         {tab === 'visao-geral' ? (
           <Overview property={property} navigate={navigate} />
-        ) : tab === 'orcamentos' ? (
-          <QuotesPanel property={property} navigate={navigate} />
         ) : (
-          <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />
+          <PropertyWorkspace
+            property={property}
+            tab={tab === 'orcamentos' ? 'adm' : tab}
+            messages={messages}
+            onNewMessage={sendMessage}
+          />
         )}
       </div>
     </main>

@@ -27,6 +27,7 @@ from app.db.base import Base
 from app.db.models import MaintenanceTicket, Property
 from app.db.seed import run_seed
 from app.db.session import engine, get_db
+from app.observability.langfuse_client import langfuse_client
 from app.scheduler.provider_jobs import create_provider_scheduler
 from app.schemas.property import PropertyRead
 
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await close_resolver_checkpointer()
         if scheduler is not None:
             scheduler.shutdown(wait=False)
+        langfuse_client.flush()
 
 
 app = FastAPI(

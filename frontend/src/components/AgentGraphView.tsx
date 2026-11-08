@@ -39,14 +39,14 @@ const PROPERTY_FLOW_SUMMARIES: Record<
   { statusLabel: string; summary: string; focusNodeId: string; tone: 'waiting' | 'success' | 'idle' }
 > = {
   all: {
-    statusLabel: '4 imóveis monitorados',
-    summary: '1 chamado aguarda aprovação humana na Casa Aurora; 3 imóveis operam em triagem automática.',
+    statusLabel: '3 imóveis monitorados',
+    summary: '1 chamado aguarda aprovação humana na Casa Aurora; 2 imóveis operam em triagem automática.',
     focusNodeId: 'node-3-adm',
     tone: 'waiting',
   },
   'city:Fortaleza': {
     statusLabel: 'Imóveis em Fortaleza (CE)',
-    summary: 'Casa Aurora com aprovação pendente; Loft Jardim e Vila Areia em operação regular.',
+    summary: 'Casa Aurora com aprovação pendente; Loft Jardim em operação regular.',
     focusNodeId: 'node-3-adm',
     tone: 'waiting',
   },
@@ -68,12 +68,6 @@ const PROPERTY_FLOW_SUMMARIES: Record<
     focusNodeId: 'node-1',
     tone: 'success',
   },
-  'vila-areia': {
-    statusLabel: 'Operação normal · Sem chamados abertos',
-    summary: 'Roteador em escuta para novas mensagens de hóspedes ou camareira.',
-    focusNodeId: 'prop-vila-areia',
-    tone: 'idle',
-  },
   'prop-portodigital-04': {
     statusLabel: 'Atendimento comercial ativo (Nó 1)',
     summary: 'Consultas sobre Wi-Fi dedicado de 500Mbps e check-in autônomo atendidas pelo Nó 1.',
@@ -87,7 +81,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-3-adm')
   const [copiedTrace, setCopiedTrace] = useState(false)
 
-  const propList = useMemo(() => propertiesList.slice(0, 4), [propertiesList])
+  const propList = useMemo(() => propertiesList.slice(0, 3), [propertiesList])
 
   const availableProperties = useMemo(() => {
     const list = propList.length > 0 ? propList : properties
@@ -132,7 +126,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         sublabel: 'Praia do Futuro · CE',
         type: 'property',
         x: 96,
-        y: 115,
+        y: 140,
         radius: 28,
         description:
           'Chamado elétrico em andamento (chuveiro). Orçamentos aguardam aprovação do anfitrião.',
@@ -155,7 +149,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         sublabel: 'Meireles · CE',
         type: 'property',
         x: 96,
-        y: 230,
+        y: 285,
         radius: 28,
         description:
           'Loft urbano com reservas confirmadas e triagem de dúvidas ativas no Nó 1.',
@@ -172,36 +166,13 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         },
       },
       {
-        id: 'prop-vila-areia',
-        propertyId: 'vila-areia',
-        label: 'Vila Areia',
-        sublabel: 'Cumbuco · CE',
-        type: 'property',
-        x: 96,
-        y: 345,
-        radius: 28,
-        description:
-          'Imóvel à beira-mar com agenda ativa. Nenhum chamado pendente no momento.',
-        modelName: 'Canal Único do Imóvel',
-        defaultStatus: 'idle',
-        langfuse: {
-          traceId: 'run-vila-003',
-          spanName: 'imovel.vila-areia.chat',
-          tokensIn: 90,
-          tokensOut: 25,
-          costUsd: 0.000014,
-          latencyMs: 95,
-          isMock: true,
-        },
-      },
-      {
         id: 'prop-portodigital',
         propertyId: 'prop-portodigital-04',
         label: 'Studio Tech',
         sublabel: 'Porto Digital · PE',
         type: 'property',
         x: 96,
-        y: 460,
+        y: 430,
         radius: 28,
         description:
           'Studio no polo de inovação do Recife. Atendimento automático a dúvidas de check-in.',
@@ -438,7 +409,6 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
     () => [
       { from: 'prop-casa-aurora', to: 'node-router', activeFor: ['all', 'casa-aurora'] },
       { from: 'prop-loft-jardim', to: 'node-router', activeFor: ['all', 'loft-jardim'] },
-      { from: 'prop-vila-areia', to: 'node-router', activeFor: ['all', 'vila-areia'] },
       { from: 'prop-portodigital', to: 'node-router', activeFor: ['all', 'prop-portodigital-04'] },
       { from: 'node-router', to: 'node-1', activeFor: ['all', 'loft-jardim', 'prop-portodigital-04'] },
       { from: 'node-router', to: 'node-2', activeFor: ['all', 'casa-aurora'] },
@@ -463,7 +433,7 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
   function isNodeCityMatch(propertyId: string | undefined, city: string): boolean {
     if (!propertyId) return false
     if (city === 'Fortaleza') {
-      return propertyId === 'casa-aurora' || propertyId === 'loft-jardim' || propertyId === 'vila-areia'
+      return propertyId === 'casa-aurora' || propertyId === 'loft-jardim'
     }
     if (city === 'Recife') {
       return propertyId === 'prop-portodigital-04'

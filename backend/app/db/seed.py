@@ -7,6 +7,7 @@ from app.db.base import Base
 from app.db.models import Booking, MaintenanceTicket, Property, Provider
 from app.db.session import SessionLocal, engine
 from app.schemas.common import ProviderCategory, ReportedByRole, TicketStatus, TicketUrgency
+from app.services.provider_collector import REGIONAL_MAPS_DIRECTORY
 
 
 def _ensure_schema_columns(db: Session) -> None:
@@ -36,6 +37,22 @@ def _ensure_schema_columns(db: Session) -> None:
                 db.execute(text("ALTER TABLE bookings ADD COLUMN rejection_reason TEXT"))
             if "session_id" not in book_cols:
                 db.execute(text("ALTER TABLE bookings ADD COLUMN session_id VARCHAR(100)"))
+
+        if "providers" in tables:
+            prov_cols = {c["name"] for c in inspector.get_columns("providers")}
+            if "reviews_count" not in prov_cols:
+                db.execute(
+                    text(
+                        "ALTER TABLE providers ADD COLUMN reviews_count INTEGER NOT NULL DEFAULT 42"
+                    )
+                )
+            if "address" not in prov_cols:
+                db.execute(text("ALTER TABLE providers ADD COLUMN address VARCHAR(220)"))
+
+        if "maintenance_tickets" in tables:
+            ticket_cols = {c["name"] for c in inspector.get_columns("maintenance_tickets")}
+            if "adm_synthesis" not in ticket_cols:
+                db.execute(text("ALTER TABLE maintenance_tickets ADD COLUMN adm_synthesis TEXT"))
 
         db.commit()
     except Exception:
@@ -188,104 +205,55 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
             if b.id not in existing_booking_ids:
                 db.add(b)
 
-        # 3. Providers validados no DB (todas as categorias)
-        existing_provider_ids = {p.id for p in db.query(Provider.id).all()}
-        all_seed_providers = [
-            Provider(
-                id="prov-encanador-01",
-                name="Mario Encanamentos Rápidos",
-                category=ProviderCategory.PLUMBER.value,
-                region="Rio de Janeiro - Zona Sul",
-                phone="+55 (21) 98888-1111",
-                is_validated=True,
-                rating=4.9,
-                source="google_places",
-            ),
-            Provider(
-                id="prov-eletricista-01",
-                name="Volts & Watts Elétrica Segura",
-                category=ProviderCategory.ELECTRICIAN.value,
-                region="Rio de Janeiro - Zona Sul",
-                phone="+55 (21) 97777-2222",
-                is_validated=True,
-                rating=4.8,
-                source="google_places",
-            ),
-            Provider(
-                id="prov-pintor-01",
-                name="Cores Vivas Pintura Imobiliária",
-                category=ProviderCategory.PAINTER.value,
-                region="São Paulo - Zona Oeste",
-                phone="+55 (11) 96666-3333",
-                is_validated=True,
-                rating=5.0,
-                source="google_places",
-            ),
-            Provider(
-                id="prov-organizador-01",
-                name="Harmonia Casa & Organização",
-                category=ProviderCategory.ORGANIZER.value,
-                region="São Paulo - Zona Oeste",
-                phone="+55 (11) 95555-4444",
-                is_validated=True,
-                rating=4.9,
-                source="fixture",
-            ),
-            Provider(
-                id="prov-geral-01",
-                name="Faz-Tudo Serra Reparos Gerais",
-                category=ProviderCategory.GENERAL_MAINTENANCE.value,
-                region="Gramado - Serra Gaúcha",
-                phone="+55 (54) 94444-5555",
-                is_validated=True,
-                rating=4.7,
-                source="google_places",
-            ),
-            Provider(
-                id="prov-encanador-02",
-                name="HidroFix Desentupidora e Tubulações",
-                category=ProviderCategory.PLUMBER.value,
-                region="Rio de Janeiro - Zona Sul",
-                phone="+55 (21) 93333-6666",
-                is_validated=True,
-                rating=4.6,
-                source="fixture",
-            ),
-            # Prestadores de Recife (Porto Digital)
-            Provider(
-                id="prov-recife-ar-01",
-                name="MangueTech Climatização & Refrigeração",
-                category=ProviderCategory.GENERAL_MAINTENANCE.value,
-                region="Recife - Bairro do Recife",
-                phone="+55 (81) 99999-5555",
-                is_validated=True,
-                rating=5.0,
-                source="google_places",
-            ),
-            Provider(
-                id="prov-recife-eletrica-01",
-                name="Capibaribe Soluções Elétricas & Redes",
-                category=ProviderCategory.ELECTRICIAN.value,
-                region="Recife - Bairro do Recife",
-                phone="+55 (81) 98888-7777",
-                is_validated=True,
-                rating=4.9,
-                source="google_places",
-            ),
-            Provider(
-                id="prov-recife-hidro-01",
-                name="Frevo Hidráulica & Reparos Rápidos",
-                category=ProviderCategory.PLUMBER.value,
-                region="Recife - Bairro do Recife",
-                phone="+55 (81) 97777-8888",
-                is_validated=True,
-                rating=4.8,
-                source="fixture",
-            ),
-        ]
-        for p in all_seed_providers:
-            if p.id not in existing_provider_ids:
-                db.add(p)
+        # 3. Providers validados no DB (3 por categoria e cidade com nota, avaliações e endereço)
+        db.query(Provider).filter(
+            (Provider.source != "web_maps") | (Provider.name.like("Prestador simulado%"))
+        ).delete(synchronize_session=False)
+        db.flush()
+
+        existing_providers_by_id = {p.id: p for p in db.query(Provider).all()}
+        existing_providers_by_phone = {p.phone: p for p in existing_providers_by_id.values()}
+
+        city_region_labels = {
+            "rio de janeiro": "Rio de Janeiro - Zona Sul",
+            "são paulo": "São Paulo - Zona Oeste",
+            "recife": "Recife - Bairro do Recife",
+        }
+
+        for city_key, categories_map in REGIONAL_MAPS_DIRECTORY.items():
+            region_label = city_region_labels.get(city_key, city_key.title())
+            for cat, entries in categories_map.items():
+                for entry in entries:
+                    prov_id = str(entry["id"])
+                    phone = str(entry["phone"])
+                    existing_prov = existing_providers_by_id.get(
+                        prov_id
+                    ) or existing_providers_by_phone.get(phone)
+                    if existing_prov is not None:
+                        existing_prov.name = str(entry["name"])
+                        existing_prov.category = cat.value
+                        existing_prov.region = region_label
+                        existing_prov.rating = float(str(entry["rating"]))
+                        existing_prov.reviews_count = int(str(entry["reviews_count"]))
+                        existing_prov.address = str(entry["address"])
+                        existing_prov.is_validated = True
+                        existing_prov.source = "web_maps"
+                    else:
+                        new_prov = Provider(
+                            id=prov_id,
+                            name=str(entry["name"]),
+                            category=cat.value,
+                            region=region_label,
+                            phone=phone,
+                            is_validated=True,
+                            rating=float(str(entry["rating"])),
+                            reviews_count=int(str(entry["reviews_count"])),
+                            address=str(entry["address"]),
+                            source="web_maps",
+                        )
+                        db.add(new_prov)
+                        existing_providers_by_id[prov_id] = new_prov
+                        existing_providers_by_phone[phone] = new_prov
 
         # 4. Demonstração de Ticket Inicial
         existing_tickets_count = db.query(MaintenanceTicket).count()
