@@ -236,6 +236,11 @@ async def generate(
             "temperature": temperature,
         }
 
+        # Qwen reasoning can consume the entire short response budget before
+        # producing user-facing content. Request direct answers for these agents.
+        if model.startswith("Qwen/Qwen3"):
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(featherless_url, headers=headers, json=payload)
             response.raise_for_status()

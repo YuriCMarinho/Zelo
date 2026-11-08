@@ -211,8 +211,9 @@ export async function sendChatMessage(params: {
   senderRole: 'tenant' | 'cleaner'
   runId?: string
 }): Promise<ChatApiResult> {
+  let res: Response
   try {
-    const res = await fetch(`${API_BASE}/chat`, {
+    res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -222,27 +223,28 @@ export async function sendChatMessage(params: {
         run_id: params.runId,
       }),
     })
-    if (res.ok) {
-      const data = await res.json()
-      return {
-        runId: data.run_id,
-        propertyId: data.property_id,
-        routeDestination: data.route_destination,
-        responseText: data.response_text,
-        ticketId: data.ticket_id,
-        suggestedActions: data.suggested_actions || [],
-      }
-    }
   } catch {
-    // fallback quando backend offline
+    throw new Error('Não foi possível conectar ao atendimento. Verifique se o backend está disponível e tente novamente.')
+  }
+  if (!res.ok) {
+    if (res.status === 404) throw new Error('Este imóvel não foi encontrado no atendimento. Atualize a página para carregar os imóveis disponíveis.')
+    if (res.status === 400) throw new Error('A mensagem não pôde ser processada. Revise o conteúdo e tente novamente.')
+    throw new Error(`O atendimento está indisponível (HTTP ${res.status}). Tente novamente em instantes.`)
+  }
+  let data: Record<string, unknown>
+  try {
+    data = await res.json()
+    if (!data || typeof data.response_text !== 'string' || !data.response_text.trim()) throw new Error()
+  } catch {
+    throw new Error('O atendimento retornou uma resposta inválida. Tente novamente.')
   }
   return {
-    runId: `run-mock-${Date.now()}`,
-    propertyId: params.propertyId,
-    routeDestination: 'commercial_node1',
-    responseText: 'Olá! Recebemos sua mensagem com carinho. Como podemos ajudar?',
-    ticketId: null,
-    suggestedActions: [],
+    runId: String(data.run_id),
+    propertyId: String(data.property_id),
+    routeDestination: String(data.route_destination),
+    responseText: data.response_text as string,
+    ticketId: typeof data.ticket_id === 'string' ? data.ticket_id : null,
+    suggestedActions: Array.isArray(data.suggested_actions) ? data.suggested_actions : [],
   }
 }
 

@@ -619,3 +619,32 @@ def test_guardrails_edge_cases() -> None:
     with pytest.raises(SecurityViolationError) as exc_type:
         validate_untrusted_input(12345, role="cleaner", run_id="run-err")  # type: ignore[arg-type]
     assert "string" in str(exc_type.value)
+
+
+@pytest.mark.asyncio
+async def test_qwen_requests_direct_answers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Short token budgets must be used for the answer rather than reasoning."""
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(settings, "llm_mode", "featherless")
+    response = MagicMock()
+    response.json.return_value = {
+        "choices": [{"message": {"content": "A internet é de 500 Mbps."}}],
+        "usage": {"prompt_tokens": 20, "completion_tokens": 12},
+    }
+    client = AsyncMock()
+    client.post.return_value = response
+    with patch("app.core.llm.httpx.AsyncClient") as factory:
+        factory.return_value.__aenter__.return_value = client
+        result = await generate(
+            messages=[{"role": "user", "content": "Qual a velocidade da internet?"}],
+            model="Qwen/Qwen3.5-9B",
+            max_tokens=256,
+            run_id="run-direct-answer",
+            node="commercial_node1",
+        )
+    assert result.content == "A internet é de 500 Mbps."
+    assert not result.is_mock
+    payload = client.post.call_args.kwargs["json"]
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
+    assert payload["max_tokens"] == 256

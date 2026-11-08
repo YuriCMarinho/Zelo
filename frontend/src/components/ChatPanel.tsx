@@ -20,14 +20,23 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [role, setRole] = useState<ChatRole>('hospede')
   const [draft, setDraft] = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const typingDelayRef = useRef(0)
 
   const visibleMessages = messages.filter((m) => m.propertyId === property.id)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' })
-  }, [visibleMessages])
+  }, [visibleMessages, isTyping])
+
+  useEffect(() => {
+    if (!loading) return
+    const timer = window.setTimeout(() => setIsTyping(true), typingDelayRef.current)
+    return () => window.clearTimeout(timer)
+  }, [loading])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -47,7 +56,11 @@ export function ChatPanel({
     }
     onNewMessage(userMsg)
     setDraft('')
+    const initialPause = 4000 + Math.random() * 4000
+    typingDelayRef.current = initialPause
     setLoading(true)
+    setError('')
+    const startedAt = Date.now()
 
     try {
       const res = await sendChatMessage({
@@ -55,6 +68,12 @@ export function ChatPanel({
         message: text,
         senderRole: role === 'camareira' ? 'cleaner' : 'tenant',
       })
+
+      // A API pode consumir a pausa inicial, mas nunca o tempo de digitação.
+      const variation = 0.85 + Math.random() * 0.3
+      const typingTime = Math.min(8000, Math.max(1200, (800 + res.responseText.length * 30) * variation))
+      const remainingPause = Math.max(0, initialPause - (Date.now() - startedAt))
+      await new Promise<void>((resolve) => window.setTimeout(resolve, remainingPause + typingTime))
 
       const agentMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -70,22 +89,18 @@ export function ChatPanel({
       if (res.ticketId && onTicketCreated) {
         onTicketCreated(res.ticketId)
       }
-    } catch {
-      onNewMessage({
-        id: crypto.randomUUID(),
-        propertyId: property.id,
-        channel: 'guest',
-        sender: 'agent',
-        body: 'Recebemos seu relato! Nossa equipe e nossos agentes já estão cuidando da situação.',
-        time: timeStr,
-      })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível processar a mensagem. Tente novamente.')
+      setDraft(text)
     } finally {
+      setIsTyping(false)
       setLoading(false)
     }
   }
 
   return (
     <div className="chat-container" aria-label={`Ponto único de chat: ${property.title}`}>
+      {error && <p role="alert" className="form-error" style={{ padding: '12px 20px' }}>{error}</p>}
       {/* Header Conversa.dc.html */}
       <div className="chat-header">
         <ZeloLogo size={44} />
@@ -156,7 +171,7 @@ export function ChatPanel({
           </div>
         )}
 
-        {loading && (
+        {isTyping && (
           <div className="msg-bubble agent" style={{ opacity: 0.7 }}>
             Digitando resposta...
           </div>
