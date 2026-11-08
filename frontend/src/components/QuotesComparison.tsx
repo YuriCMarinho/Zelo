@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import type { MaintenanceTicket, Property, Quote } from '../contracts'
+import { useEffect, useState } from 'react'
+import { fetchAuditEvents } from '../api/client'
+import type { AuditEvent, MaintenanceTicket, Property, Quote } from '../contracts'
 
 const money = (val: number | null | undefined) =>
   val != null
@@ -31,6 +32,28 @@ export function QuotesComparison({
   })
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [loadingAudit, setLoadingAudit] = useState(false)
+
+  useEffect(() => {
+    let ignore = false
+    if (!ticket?.id) return
+
+    fetchAuditEvents(ticket.id)
+      .then((evs) => {
+        if (!ignore) {
+          setAuditEvents(evs)
+          setLoadingAudit(false)
+        }
+      })
+      .catch(() => {
+        if (!ignore) setLoadingAudit(false)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [ticket?.id, ticket?.status])
 
   const selectedQuote = quotes.find((q) => q.provider_id === selectedProviderId) || quotes[0]
 
@@ -120,6 +143,124 @@ export function QuotesComparison({
           </p>
         ) : null}
       </div>
+
+      {/* Trilha de Auditoria dos Agentes para esta Operação */}
+      {ticket && (
+        <section
+          style={{
+            margin: '0 0 20px',
+            padding: '16px 20px',
+            background: 'var(--areia)',
+            borderRadius: '16px',
+            border: '1px solid var(--mar-08)',
+          }}
+          aria-label="Trilha de auditoria dos agentes"
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div>
+              <span className="eyebrow" style={{ fontSize: '11px', color: 'var(--mar-profundo)' }}>
+                AUDITORIA DA OPERAÇÃO · TRILHA DOS AGENTES
+              </span>
+              <h3 style={{ margin: '2px 0 0', fontSize: '15px' }}>
+                Como os agentes processaram este chamado
+              </h3>
+            </div>
+            <span style={{ fontSize: '12px', color: 'var(--mar-72)', fontWeight: 600 }}>
+              {auditEvents.length} etapa(s) registrada(s)
+            </span>
+          </div>
+
+          {loadingAudit ? (
+            <div style={{ fontSize: '13px', color: 'var(--mar-72)', padding: '8px 0' }}>
+              Carregando eventos dos agentes...
+            </div>
+          ) : auditEvents.length === 0 ? (
+            <div style={{ fontSize: '13px', color: 'var(--mar-72)', padding: '8px 0' }}>
+              Nenhum evento registrado ainda para este chamado.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {auditEvents.slice(0, 6).map((ev) => (
+                <div
+                  key={ev.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    padding: '8px 12px',
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                        {ev.node}
+                      </span>
+                      <strong>{ev.event_type}</strong>
+                    </div>
+                    <time style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
+                      {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
+                    </time>
+                  </div>
+                  {ev.payload && Object.keys(ev.payload).length > 0 && (
+                    <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
+                      {Object.entries(ev.payload)
+                        .slice(0, 3)
+                        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+                        .join(' · ')}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {auditEvents.length > 6 && (
+                <details style={{ fontSize: '12px', marginTop: '4px' }}>
+                  <summary style={{ cursor: 'pointer', color: 'var(--mar-profundo)', fontWeight: 600 }}>
+                    Ver mais {auditEvents.length - 6} etapas da operação...
+                  </summary>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                    {auditEvents.slice(6).map((ev) => (
+                      <div
+                        key={ev.id}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          padding: '8px 12px',
+                          background: 'rgba(255, 255, 255, 0.85)',
+                          borderRadius: '10px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                              {ev.node}
+                            </span>
+                            <strong>{ev.event_type}</strong>
+                          </div>
+                          <time style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
+                            {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
+                          </time>
+                        </div>
+                        {ev.payload && Object.keys(ev.payload).length > 0 && (
+                          <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
+                            {Object.entries(ev.payload)
+                              .slice(0, 3)
+                              .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+                              .join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Lista de Cotações Recebidas */}
       <div className="adm-quotes-list" role="radiogroup" aria-label="Opções de orçamento">

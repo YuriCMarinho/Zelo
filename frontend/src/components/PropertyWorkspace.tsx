@@ -32,6 +32,11 @@ export function PropertyWorkspace({
           if (active.scheduled_date) setScheduledDate(active.scheduled_date)
           const qList = await fetchQuotes(active.id)
           setQuotes(qList)
+        } else if (property.id === 'casa-aurora') {
+          // mantem em caso de teste offline
+        } else {
+          setTicket(null)
+          setQuotes([])
         }
       })
       .catch(() => {})
@@ -54,7 +59,7 @@ export function PropertyWorkspace({
             setQuotes(qList)
             setLoadingQuotes(false)
           }
-        } else {
+        } else if (property.id === 'casa-aurora') {
           setTicket({
             id: 'tick-demo-302',
             run_id: 'run-demo-001',
@@ -107,6 +112,9 @@ export function PropertyWorkspace({
               status: 'received',
             },
           ])
+        } else {
+          setTicket(null)
+          setQuotes([])
         }
       })
       .catch(() => {})
@@ -118,11 +126,14 @@ export function PropertyWorkspace({
 
   async function handleApprove(providerId: string) {
     if (!ticket) return
-    const updated = await approveQuote(ticket.id, providerId)
+    const updated = await approveQuote(ticket.id, providerId, ticket.run_id)
     setTicket(updated)
     // Após a aprovação o Nó 3 ainda espera a devolutiva do prestador; o hóspede só é
     // avisado quando o dia estiver confirmado.
-    if (updated.status !== 'resolved' && updated.status !== 'confirmed_schedule') return
+    if (updated.status !== 'resolved' && updated.status !== 'confirmed_schedule') {
+      loadTicketData()
+      return
+    }
     const dateStr = updated.scheduled_date || 'amanhã, 9h'
     setScheduledDate(dateStr)
 

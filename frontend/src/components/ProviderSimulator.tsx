@@ -53,6 +53,28 @@ export function ProviderSimulator({
     }
   }
 
+  async function handleSimulateNodeS() {
+    setRunning(true)
+    setFeedback(null)
+    try {
+      const res = await sendChatMessage({
+        propertyId: property.id,
+        message: 'A parede da sala está com a pintura descascando e com mofo.',
+        senderRole: 'tenant',
+      })
+      if (res.ticketId) {
+        setFeedback(`Ticket #${res.ticketId.slice(0, 8)} aberto! Sem prestador prévio: Nó S acionado para busca e validação.`)
+      } else {
+        setFeedback('Mensagem enviada com sucesso ao assistente.')
+      }
+      onTicketUpdated()
+    } catch (err: unknown) {
+      setFeedback(`Erro ao simular Nó S: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setRunning(false)
+    }
+  }
+
   async function handleSimulateCommercial() {
     setRunning(true)
     setFeedback(null)
@@ -102,7 +124,16 @@ export function ProviderSimulator({
   function handleProvidersSendQuotes() {
     if (!currentTicketId) return
     void runProviderAction(async () => {
-      const pending = (await fetchQuotes(currentTicketId)).filter((q) => q.status === 'requested')
+      let quotes = await fetchQuotes(currentTicketId)
+      let pending = quotes.filter((q) => q.status === 'requested')
+      if (pending.length === 0 && (ticketStatus === 'open' || ticketStatus === 'requesting_quotes')) {
+        await startTicketResolution(currentTicketId)
+        quotes = await fetchQuotes(currentTicketId)
+        pending = quotes.filter((q) => q.status === 'requested')
+      }
+      if (pending.length === 0) {
+        return 'Nenhum prestador pendente no momento para enviar orçamento.'
+      }
       for (const [index, quote] of pending.entries()) {
         await submitQuoteResponse(currentTicketId, quote.provider_id, SAMPLE_QUOTES[index % SAMPLE_QUOTES.length]!)
       }
@@ -155,7 +186,17 @@ export function ProviderSimulator({
           <span>Roteador direciona ao Nó 1 (Comercial) sem gerar ticket.</span>
         </button>
 
-        {currentTicketId && ticketStatus === 'waiting_quotes' && (
+        <button
+          type="button"
+          className="scenario-btn"
+          disabled={running}
+          onClick={handleSimulateNodeS}
+        >
+          <strong>Simular Descoberta (Nó S)</strong>
+          <span>Relata pintura em RJ (sem prestador prévio): aciona Nó S para buscar e validar.</span>
+        </button>
+
+        {currentTicketId && (ticketStatus === 'waiting_quotes' || ticketStatus === 'requesting_quotes') && (
           <button
             type="button"
             className="scenario-btn"
