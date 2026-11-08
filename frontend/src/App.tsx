@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ChatMessage, CostSummary, Occupancy, Property, PropertyTab } from './contracts'
+import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
-import { fetchCostSummary, fetchProperties, resetDemoData } from './api/client'
+import { fetchProperties, resetDemoData } from './api/client'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
 import { parseRoute, propertyUrl, type Route } from './routes'
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)
-const usd = (val: number | undefined) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val ?? 0)
 const currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'visao-geral', label: 'Visão geral' },
@@ -26,20 +24,6 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
-  const [costs, setCosts] = useState<CostSummary | null>(null)
-
-  useEffect(() => {
-    fetchCostSummary().then(setCosts).catch(() => {})
-    const interval = setInterval(() => {
-      fetchCostSummary().then(setCosts).catch(() => {})
-    }, 8000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const spent = costs?.total_cost_usd ?? 0.0
-  const limit = costs?.budget_limit_usd ?? 25.0
-  const percent = Math.min(100, (spent / limit) * 100)
-  const isAlert = percent >= 75
 
   const handleReset = async () => {
     setIsResetting(true)
@@ -78,33 +62,6 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
           ))}
         </nav>
         <div className="header-right">
-          <div
-            className={`budget-monitor ${isAlert ? 'alert' : ''}`}
-            title={`Orçamento de IA: ${usd(spent)} de ${usd(limit)} (${percent.toFixed(1)}%)`}
-            aria-label={`Orçamento IA: ${usd(spent)} de ${usd(limit)}`}
-          >
-            <div className={`budget-dot ${isAlert ? 'alert' : ''}`} aria-hidden="true" />
-            <div className="budget-info">
-              <strong>Orçamento IA</strong>
-              <span className="tabular-nums">
-                {usd(spent)} / {usd(limit)}
-              </span>
-            </div>
-            <div
-              className="budget-bar"
-              role="progressbar"
-              aria-valuenow={spent}
-              aria-valuemin={0}
-              aria-valuemax={limit}
-              aria-label="Consumo do orçamento"
-            >
-              <div
-                className={`budget-bar-fill ${isAlert ? 'alert' : ''}`}
-                style={{ width: `${Math.max(4, percent)}%` }}
-              />
-            </div>
-          </div>
-
           <button
             type="button"
             className="demo-reset-btn"
