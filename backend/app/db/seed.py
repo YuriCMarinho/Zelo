@@ -7,6 +7,7 @@ from app.db.base import Base
 from app.db.models import Booking, MaintenanceTicket, Property, Provider
 from app.db.session import SessionLocal, engine
 from app.schemas.common import ProviderCategory, ReportedByRole, TicketStatus, TicketUrgency
+from app.services.provider_identity import provider_identity
 
 
 def _ensure_schema_columns(db: Session) -> None:
@@ -15,6 +16,45 @@ def _ensure_schema_columns(db: Session) -> None:
         bind = db.get_bind()
         inspector = inspect(bind)
         tables = set(inspector.get_table_names())
+
+        if "providers" in tables:
+            columns = {c["name"] for c in inspector.get_columns("providers")}
+            if "identity_key" not in columns:
+                db.execute(text("ALTER TABLE providers ADD COLUMN identity_key VARCHAR(64)"))
+            # Não remove histórico nem altera vínculos de cotações existentes.
+            rows = (
+                db.execute(
+                    text(
+                        "SELECT id, category, region, phone, identity_key FROM providers "
+                        "ORDER BY is_validated DESC, created_at, id"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            seen = set()
+            for row in rows:
+                key = provider_identity(row["category"], row["region"], row["phone"])
+                if key in seen:
+                    db.execute(
+                        text(
+                            "UPDATE providers SET is_validated=false, identity_key=NULL "
+                            "WHERE id=:id"
+                        ),
+                        {"id": row["id"]},
+                    )
+                else:
+                    seen.add(key)
+                    db.execute(
+                        text("UPDATE providers SET identity_key=:key WHERE id=:id"),
+                        {"key": key, "id": row["id"]},
+                    )
+            db.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_provider_identity "
+                    "ON providers(identity_key)"
+                )
+            )
 
         if "properties" in tables:
             prop_cols = {c["name"] for c in inspector.get_columns("properties")}
