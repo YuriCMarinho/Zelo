@@ -97,6 +97,20 @@ def evaluate_budget_alert(spent_usd: float, limit_usd: float) -> str | None:
     return None
 
 
+def active_budget_envelope(global_ceiling: float | None = None) -> tuple[float, float]:
+    """Retorna (piso, teto) do envelope de gasto global ativo.
+
+    Antes da S3 o envelope é [0, global - reserva]; com a reserva liberada
+    (BUDGET_RESERVE_UNLOCKED=true) passa a ser [global - reserva, global].
+    Alertas e corte usam esse envelope, para nunca invadir a reserva sem querer.
+    """
+    total = global_ceiling if global_ceiling is not None else settings.max_cost_global_usd
+    dev_ceiling = max(total - settings.budget_reserve_usd, 0.0)
+    if settings.budget_reserve_unlocked:
+        return dev_ceiling, total
+    return 0.0, dev_ceiling
+
+
 def check_budget_before_call(
     run_id: str,
     estimated_cost: float,
@@ -109,9 +123,7 @@ def check_budget_before_call(
     Lança BudgetExceededError com corte automático se ultrapassar 100%.
     """
     run_ceiling = max_run_cost if max_run_cost is not None else settings.max_cost_per_run_usd
-    global_ceiling = (
-        max_global_cost if max_global_cost is not None else settings.max_cost_global_usd
-    )
+    global_floor, global_ceiling = active_budget_envelope(max_global_cost)
 
     if db is not None:
         # Consulta histórico por run_id no banco
@@ -145,9 +157,7 @@ def check_budget_before_call(
             f"Custo global acumulado projetado ({projected_global:.6f} USD) "
             f"excede o teto de {global_ceiling:.4f} USD."
         )
-        logger.error(
-            msg, extra={"projected_global": projected_global, "limit": global_ceiling}
-        )
+        logger.error(msg, extra={"projected_global": projected_global, "limit": global_ceiling})
         raise BudgetExceededError(
             msg, current_cost=projected_global, limit=global_ceiling, scope="global"
         )
@@ -160,7 +170,9 @@ def check_budget_before_call(
             extra={"run_id": run_id, "alert": alert_run, "projected": projected_run},
         )
 
-    alert_global = evaluate_budget_alert(projected_global, global_ceiling)
+    alert_global = evaluate_budget_alert(
+        projected_global - global_floor, global_ceiling - global_floor
+    )
     if alert_global:
         logger.warning(
             "Alerta de orçamento global",
@@ -206,11 +218,11 @@ def record_call_cost(
 def get_cost_summary(db: Session, run_id: str | None = None) -> CostSummary:
     """Retorna o sumário consolidado de custos e alertas a partir do banco de dados."""
     query = select(CostRecord)
-    limit_usd = settings.max_cost_global_usd
+    floor_usd, limit_usd = active_budget_envelope()
 
     if run_id is not None:
         query = query.where(CostRecord.run_id == run_id)
-        limit_usd = settings.max_cost_per_run_usd
+        floor_usd, limit_usd = 0.0, settings.max_cost_per_run_usd
 
     records: Sequence[CostRecord] = db.execute(query).scalars().all()
 
@@ -229,8 +241,10 @@ def get_cost_summary(db: Session, run_id: str | None = None) -> CostSummary:
         by_model[r.model] = round(by_model.get(r.model, 0.0) + r.cost_usd, 6)
 
     total_cost_usd = round(total_cost_usd, 6)
-    percentage_used = round((total_cost_usd / limit_usd) * 100, 2) if limit_usd > 0 else 0.0
-    alert_triggered = evaluate_budget_alert(total_cost_usd, limit_usd)
+    envelope_usd = limit_usd - floor_usd
+    envelope_spent = max(total_cost_usd - floor_usd, 0.0)
+    percentage_used = round(envelope_spent / envelope_usd * 100, 2) if envelope_usd > 0 else 0.0
+    alert_triggered = evaluate_budget_alert(envelope_spent, envelope_usd)
 
     return CostSummary(
         total_cost_usd=total_cost_usd,

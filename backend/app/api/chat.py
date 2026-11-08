@@ -95,7 +95,6 @@ async def process_chat_message(
             starter = LangGraphResolverStarter(compiled_resolver_graph)
             req = ResolutionRequest(
                 ticket_id=ticket_id,
-                property_id=prop.id,
                 run_id=run_id,
             )
             await starter.astart_resolution(req, db=db)

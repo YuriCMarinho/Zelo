@@ -1,7 +1,11 @@
 import re
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
+
+# Texto obrigatório: remove espaços nas pontas e rejeita vazio (ex.: run_id, ids).
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class ProviderCategory(StrEnum):
@@ -32,6 +36,33 @@ class TicketStatus(StrEnum):
     NOTIFYING_TENANT = "notifying_tenant"
     RESOLVED = "resolved"
     ESCALATED_TO_ADM = "escalated_to_adm"
+
+
+_S = TicketStatus
+
+# Transições permitidas (docs/PLAN.md §3). Quem muda o status do ticket deve
+# consultar is_valid_ticket_transition; aprovação do ADM não pode ser pulada.
+TICKET_TRANSITIONS: dict[TicketStatus, frozenset[TicketStatus]] = {
+    _S.TRIAGING: frozenset({_S.TRIAGING, _S.OPEN}),
+    _S.OPEN: frozenset({_S.NO_PROVIDERS_FALLBACK, _S.REQUESTING_QUOTES}),
+    _S.NO_PROVIDERS_FALLBACK: frozenset({_S.REQUESTING_QUOTES, _S.ESCALATED_TO_ADM}),
+    _S.REQUESTING_QUOTES: frozenset({_S.WAITING_QUOTES}),
+    _S.WAITING_QUOTES: frozenset({_S.AWAITING_ADM_APPROVAL, _S.ESCALATED_TO_ADM}),
+    _S.AWAITING_ADM_APPROVAL: frozenset({_S.AWAITING_ADM_APPROVAL, _S.PROPOSING_DATE}),
+    _S.PROPOSING_DATE: frozenset({_S.WAITING_DATE_CONFIRMATION}),
+    _S.WAITING_DATE_CONFIRMATION: frozenset(
+        {_S.PROPOSING_DATE, _S.ESCALATED_TO_ADM, _S.CONFIRMED_SCHEDULE}
+    ),
+    _S.CONFIRMED_SCHEDULE: frozenset({_S.NOTIFYING_TENANT, _S.RESOLVED}),
+    _S.NOTIFYING_TENANT: frozenset({_S.RESOLVED}),
+    _S.RESOLVED: frozenset(),
+    _S.ESCALATED_TO_ADM: frozenset(),
+}
+
+
+def is_valid_ticket_transition(current: TicketStatus, new: TicketStatus) -> bool:
+    """Indica se o ticket pode passar de `current` para `new`."""
+    return new in TICKET_TRANSITIONS[current]
 
 
 class ReportedByRole(StrEnum):

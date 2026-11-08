@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     provider_simulated_replies: str = "{}"
     provider_collection_hours: int = 12
     max_places_calls: int = 50
+    # Reserva obrigatória de 30% (docs/COST.md): bloqueada até a S3/Demo Day.
+    budget_reserve_usd: float = 7.50
+    budget_reserve_unlocked: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

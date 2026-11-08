@@ -9,12 +9,14 @@ from app.schemas.audit import AuditEventCreate
 from app.schemas.booking import BookingCreate, BookingRead
 from app.schemas.chat import ChatMessageInput, ChatMessageOutput
 from app.schemas.common import (
+    TICKET_TRANSITIONS,
     ProviderCategory,
     QuoteStatus,
     ReportedByRole,
     RouteDestination,
     TicketStatus,
     TicketUrgency,
+    is_valid_ticket_transition,
     mask_phone,
 )
 from app.schemas.cost import CostRecordCreate, CostSummary
@@ -220,26 +222,47 @@ def test_audit_and_cost_schemas() -> None:
     assert summary.percentage_used == 0.02
 
 
-def test_ticket_status_matches_plan_state_machine() -> None:
-    """O enum TicketStatus deve ter exatamente os estados do diagrama em docs/PLAN.md §3."""
+def test_ticket_transitions_match_plan_state_machine() -> None:
+    """TicketStatus e TICKET_TRANSITIONS devem bater com o diagrama de docs/PLAN.md §3."""
     plan = Path(__file__).resolve().parents[2] / "docs" / "PLAN.md"
+    if not plan.exists():
+        pytest.skip("docs/PLAN.md fora deste checkout (ex.: imagem só do backend)")
     diagram = plan.read_text(encoding="utf-8").split("stateDiagram-v2", 1)[1].split("```", 1)[0]
-    transitions = re.findall(r"^\s*(\S+)\s*-->\s*([^:\s]+)", diagram, flags=re.MULTILINE)
-    plan_states = {state for pair in transitions for state in pair} - {"[*]"}
+    pairs = re.findall(r"^\s*(\S+)\s*-->\s*([^:\s]+)", diagram, flags=re.MULTILINE)
+    plan_edges = {(a, b) for a, b in pairs if "[*]" not in (a, b)}
+    plan_states = {state for edge in plan_edges for state in edge}
+
     assert plan_states == {status.name for status in TicketStatus}
+    code_edges = {(a.name, b.name) for a, targets in TICKET_TRANSITIONS.items() for b in targets}
+    assert code_edges == plan_edges
 
 
-def test_resolution_request_requires_run_id_and_starter_protocol() -> None:
-    with pytest.raises(ValidationError):
-        ResolutionRequest(ticket_id="t-1", property_id="p-1", run_id="")
+def test_ticket_transitions_block_skipping_adm_approval() -> None:
+    s = TicketStatus
+    assert is_valid_ticket_transition(s.AWAITING_ADM_APPROVAL, s.PROPOSING_DATE)
+    assert not is_valid_ticket_transition(s.TRIAGING, s.CONFIRMED_SCHEDULE)
+    assert not is_valid_ticket_transition(s.WAITING_QUOTES, s.PROPOSING_DATE)
+    assert not is_valid_ticket_transition(s.RESOLVED, s.OPEN)
 
+
+def test_resolution_request_rejects_blank_ids() -> None:
+    for blank in ("", "   "):
+        with pytest.raises(ValidationError):
+            ResolutionRequest(ticket_id="t-1", run_id=blank)
+        with pytest.raises(ValidationError):
+            ResolutionRequest(ticket_id=blank, run_id="r-1")
+    assert ResolutionRequest(ticket_id=" t-1 ", run_id=" r-1 ").run_id == "r-1"
+
+
+def test_resolver_starter_protocol_is_satisfied_statically() -> None:
     started: list[ResolutionRequest] = []
 
     class FakeResolver:
         def start_resolution(self, request: ResolutionRequest) -> None:
             started.append(request)
 
-    resolver = FakeResolver()
-    assert isinstance(resolver, ResolverStarter)
-    resolver.start_resolution(ResolutionRequest(ticket_id="t-1", property_id="p-1", run_id="r-1"))
+    # Contrato de uso. A garantia estática vem da S2-T6, que anota sua implementação
+    # como ResolverStarter em app/ (coberto por `mypy app`).
+    resolver: ResolverStarter = FakeResolver()
+    resolver.start_resolution(ResolutionRequest(ticket_id="t-1", run_id="r-1"))
     assert started[0].run_id == "r-1"
