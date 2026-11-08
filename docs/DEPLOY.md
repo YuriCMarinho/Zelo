@@ -3,7 +3,7 @@
 > **Projeto:** Zelo — Plataforma Autônoma de Gestão e Manutenção para Imóveis de Temporada  
 > **Versão:** 1.0 (Hackathon Edition)  
 > **Arquitetura de Deploy:** Container Unificado Multi-stage (FastAPI + React SPA) com PostgreSQL Gerenciado  
-> **Link Público Homologado da Demonstração:** `https://zelo-smartrepair-ai.onrender.com` (ou configurável via Render / Railway)
+> **URL anterior da demonstração:** `https://zelo-smartrepair-ai.onrender.com`. O healthcheck retornou HTTP 404 em 2026-11-08; confirmar o endereço ativo antes da submissão. Consulte [`SUBMISSION.md`](SUBMISSION.md).
 
 ---
 
@@ -27,7 +27,7 @@ flowchart LR
 
 ### Opção A: Render (Recomendada via Blueprint `render.yaml`)
 
-O repositório já possui o arquivo [`render.yaml`](file:///Users/sergioo/orca/workspaces/converge-challange/Investigador/render.yaml) configurado para subir a aplicação web e o banco PostgreSQL gratuitamente:
+O repositório possui o arquivo [`render.yaml`](../render.yaml) para provisionar a aplicação web e o banco PostgreSQL. Disponibilidade e condições do serviço devem ser confirmadas na conta usada pelo time:
 
 1. Acesse [dashboard.render.com](https://dashboard.render.com) e conecte sua conta do GitHub.
 2. Clique em **New +** → **Blueprint**.
@@ -86,11 +86,11 @@ Para que qualquer membro da banca examinadora valide a solução do zero:
    *"A torneira da pia da cozinha quebrou e está vazando bastante água no chão."*  
    *Resultado:* O Roteador de custo zero identifica o problema e o Nó 2 Validador abre imediatamente o ticket com status `open` e urgência URGENTE.
 5. **Decisão do Anfitrião (Sessão Agente ⇄ Anfitrião):**  
-   Acesse a aba **Agente ⇄ Anfitrião**. Visualize os 3 orçamentos coletados, a síntese comparativa e aprove um dos prestadores com 1 clique.
+   Acesse a aba **Agente ⇄ Anfitrião**. Abra **Ações do prestador (demonstração)** e clique em **Prestadores respondem**. Confira os orçamentos realmente recebidos e aprove um prestador como anfitrião.
 6. **Agendamento Inteligente e Conclusão:**  
-   Veja a linha do tempo avançar automaticamente, checando a regra `urgência × agenda` e notificando o inquilino.
+   O sistema propõe uma data pela regra `urgência × agenda`. No painel do prestador, recuse ou aceite a data. Somente o aceite confirma a visita no calendário; o aviso ao inquilino é registrado na auditoria quando houver ocupação na data.
 7. **Auditoria e Ledger de Custos:**  
-   Clique na aba **Auditoria** na navegação principal para inspecionar os custos por nó, tokens consumidos e eventos registrados no Langfuse.
+   Clique em **Auditoria** para inspecionar o ledger e os eventos. No modo `recorded_demo`, o custo de reprodução é zero e o Langfuse externo não é acionado. O [Plano B](RECORDED_DEMO.md) detalha ativação e smoke test.
 
 ---
 

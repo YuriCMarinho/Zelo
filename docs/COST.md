@@ -192,3 +192,12 @@ Calibração realizada em: `2026-11-07` (Validação E2E com `Qwen/Qwen3.5-4B` e
 - **Saldo Disponível para Ensaio, Link Público e Demo Day:** **US$ 24,82** (99,28% do saldo preservado)
 - **Margem de Segurança:** O saldo remanescente é suficiente para mais de **2.500 execuções completas ao vivo** do Fluxo C, garantindo que o teto da reserva de US$ 7,50 não será ultrapassado em nenhum cenário durante o evento.
 
+
+
+## 10. Plano B da S3-T12 — captura e reprodução
+
+Em 2026-11-08 foram capturadas oito respostas reais para os cenários limitados da demonstração, usando os modelos 4B e 9B já orçados neste documento. O lote preservado em `backend/app/demo/recordings.json` custou **US$ 0,00009266**. Incluindo duas chamadas de uma tentativa descartada de classificação, o ledger registrou **US$ 0,00010336** no total das capturas desta implementação. Nenhuma chave ou dado pessoal real entrou nas gravações.
+
+A reprodução em `LLM_MODE=recorded_demo` tem custo novo de inferência **US$ 0,00**. É identificada com `is_mock=true`, mantém o ledger local e não envia tráfego à Featherless, Google Places ou Langfuse. Tokens registrados nessa reprodução são estimativas de texto reproduzido, não tokens recém-faturados. O modo continua disponível se o orçamento de inferência se esgotar, pois não executa uma chamada paga; o modo ao vivo mantém os cortes preventivos existentes.
+
+Uma nova captura exige execução explícita de `backend/scripts/record_demo.py --capture`, usa as verificações de teto por execução/global e um teto adicional de estimativa de US$ 0,003 por lote. Preços e contratações do prestador continuam sendo eventos do fluxo; não são extraídos de uma resposta gravada inventada. Consulte `docs/RECORDED_DEMO.md` para os limites e o teste de ativação.

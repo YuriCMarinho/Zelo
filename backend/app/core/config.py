@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     llm_mode: str = "mock"
+    recorded_demo_latency_ms: int = Field(default=80, ge=0, le=1000)
     featherless_api_key: str = "mock-key"
     langfuse_public_key: str = "mock-public"
     langfuse_secret_key: str = "mock-secret"

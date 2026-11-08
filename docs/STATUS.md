@@ -36,7 +36,7 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | **S3-T9** Testes E2E com Modelos Reais (Featherless) e Recalibração de Custo | Validação | **aprovada** | Dev 1 + Implementador / Revisor | `develop` (via PR #10) | `6cc7440` | Bateria E2E sob marcador @pytest.mark.real_llm, telemetria Langfuse e Seção 9 de calibração empírica no COST.md concluídas e integradas em develop (165 testes verdes, 92.5% cobr.). |
 | **S3-T10** Deploy do Link Testável + Seed/Reset para Avaliadores | Validação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR #12) | `ce22307` | Container Docker unificado multi-stage testado (FastAPI + React SPA), endpoint POST /api/demo/reset funcional, botão e modal no frontend e docs/DEPLOY.md concluídos (166 testes backend, 11 testes frontend). |
 | **S3-T11** Roteiro, Gravação do Vídeo e Material do Pitch (Demo Day) | Validação | **não iniciada** | Dev 3 + Implementador / Revisor | `docs/s3-t11-pitch-video` | — | Depende de S2 concluída. |
-| **S3-T12** Pacote Final de Submissão e Plano B (`recorded_demo`) | Validação | **não iniciada** | Dev 4 + Implementador / Revisor | `docs/s3-t12-submission-plan-b` | — | Depende de S3-T9, S3-T10, S3-T11. |
+| **S3-T12** Pacote Final de Submissão e Plano B (`recorded_demo`) | Validação | **em revisão** | Dev 4 + Implementador / Revisor | `docs/s3-t12-submission-plan-b` | `606be0e` | Plano B implementado e validado; pacote e inventário preparados. Não atende ainda ao aceite final dos 5 entregáveis: faltam vídeo/pitch da S3-T11, deploy acessível e confirmação de acesso da banca ao repositório. Ver seção 5. |
 
 ---
 
@@ -79,3 +79,14 @@ Correções da revisão incluídas no commit `db5ff69`:
 3. `PropertyWorkspace` consulta chamado e orçamentos a cada 5 segundos, ao voltar à janela, trocar de aba e após ações locais. A data exibida vem do chamado confirmado; requisições antigas não atualizam componentes desmontados e os timers são cancelados na saída.
 
 Validação atual: **56 testes do frontend aprovados**, incluindo o ciclo orçamento → aprovação → recusa/aceite → visita confirmada, falhas HTTP/rede e atualização externa com limpeza dos timers; build, TypeScript e lint aprovados. Última suíte completa do backend: **196 testes aprovados, 4 testes pagos pulados e 92,01% de cobertura**; teste adicional de disparo real do APScheduler aprovado. Recuperação de timers após reinício e integração persistente dos avisos ao chat continuam fora destas três correções.
+
+
+## 5. Entrega da S3-T12 — 2026-11-08
+
+Implementado o modo `recorded_demo` com oito respostas reais capturadas de Qwen/Featherless, latência assíncrona configurável e nenhuma chamada externa de inferência, busca de prestadores ou telemetria durante a reprodução. Cenários sem gravação e modos inválidos falham sem recorrer à API paga. O registro de custos da reprodução é zero, com sinalização `is_mock=true`.
+
+O pacote inclui `SUBMISSION.md`, `TOOLS.md`, `submission.json`, `RECORDED_DEMO.md` e um validador de arquivos/links. README e guia de deploy apontam para os materiais e distinguem funcionalidades reais, simuladas e pendentes.
+
+Validação: **211 testes backend aprovados, 4 testes pagos pulados e 92,07% de cobertura**; **56 testes frontend aprovados**, build, tipos e lint aprovados. Smoke com processo independente e banco temporário: boot em **2,995 s**, ciclo HTTP completo em **3,787 s**, dois orçamentos, recusa/aceite de data, evento `tenant_notified` e custo zero. Esses tempos são locais e não garantem cold start em hospedagem gratuita; as pausas intencionais do chat não entram nessa medição de ativação.
+
+**Pendências para aprovar a task e enviar o formulário:** vídeo e material de pitch da S3-T11 ainda não fornecidos; URL documentada do app e seu `/health` retornam 404; repositório retorna 404 no acesso anônimo. O Git autenticado local funciona. O validador `python3 scripts/check_submission.py --check-links` retorna `ready=false` com essas pendências. Não foram inventados links nem declarada uma submissão concluída.
