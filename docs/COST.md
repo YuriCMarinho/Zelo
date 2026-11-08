@@ -66,6 +66,8 @@ Carrega o mesmo `run_id` por ticket. Inclui relato de inquilino/camareira (com 1
 | 7. Nó 3 (Passo 5): Aviso ao inquilino sobre o dia da manutenção | Nó 3 Resolvedor (`Qwen3.5-4B`) | 450 | 110 / 160 | 0,10 / 0,20 | 0,000067 |
 | **Subtotal Fluxo C completo (por ticket)** | | **7.400** | **1.380** | | **0,001127** |
 
+> **Implementação atual (S2-T14):** as linhas 2, 3, 5 e 6 não chamam LLM. O pedido de orçamento e a proposta de data usam template; orçamento e devolutiva chegam estruturados pelo canal (valor, aceite/recusa) e o texto do prestador passa pelo guardrail determinístico. Custo real esperado por ticket: linhas 0 + 1 + 4 + 7 = **US$ 0,000635** (a linha 7 só ocorre com hóspede na data).
+
 ---
 
 ## 2. Custos Fora da Featherless (Não-LLM)
