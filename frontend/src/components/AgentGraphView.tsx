@@ -73,7 +73,6 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
   const [selectedPropertyFilter, setSelectedPropertyFilter] = useState<string>('all')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('node-3-adm')
   const [copiedTrace, setCopiedTrace] = useState(false)
-  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   const propList = useMemo(() => propertiesList.slice(0, 4), [propertiesList])
 
@@ -440,33 +439,11 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
               saídas e telemetria no <strong>Langfuse</strong>.
             </p>
           </div>
-          <button
-            type="button"
-            className="guide-toggle-btn"
-            onClick={() => setIsGuideOpen((prev) => !prev)}
-            aria-expanded={isGuideOpen}
-          >
-            Como funciona a Observabilidade com Langfuse nesta aplicação?
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              style={{ transform: isGuideOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
         </div>
 
         {/* Barra de filtro por imóvel + resumo contextual imediato */}
         <div className="graph-filter-container">
-          <div className="filter-pill-group" role="radiogroup" aria-label="Filtrar imóvel no grafo">
+          <div className="filter-pill-group" role="radiogroup" aria-label="Filtrar nós por imóvel">
             <button
               type="button"
               className={`filter-pill ${selectedPropertyFilter === 'all' ? 'active' : ''}`}
@@ -494,40 +471,6 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
         </div>
       </div>
 
-      {/* Faixa didática do Langfuse (sem cartões aninhados) */}
-      {isGuideOpen && (
-        <section className="langfuse-guide-strip" aria-label="Arquitetura de observabilidade Langfuse">
-          <div className="langfuse-strip-item">
-            <span className="step-tag">1. Traces & Spans</span>
-            <p>
-              Cada atendimento gera um <code>Trace</code> único (<code>run_id</code>). Cada fase do grafo executa em um{' '}
-              <code>Span</code> isolado com tempo de início e fim.
-            </p>
-          </div>
-          <div className="langfuse-strip-item">
-            <span className="step-tag">2. Mascaramento LGPD</span>
-            <p>
-              Antes do envio ao Langfuse, <code>mask_dict_pii()</code> sanitiza CPFs, telefones, chaves Pix e e-mails
-              em entradas e saídas.
-            </p>
-          </div>
-          <div className="langfuse-strip-item">
-            <span className="step-tag">3. Custo por Token</span>
-            <p>
-              Custo calculado por chamada conforme a tabela Featherless (<code>Qwen3.5-4B</code> na triagem;{' '}
-              <code>Qwen3.5-9B</code> na síntese ao anfitrião).
-            </p>
-          </div>
-          <div className="langfuse-strip-item">
-            <span className="step-tag">4. Ativação no .env</span>
-            <p>
-              Defina <code>LANGFUSE_PUBLIC_KEY</code>, <code>LANGFUSE_SECRET_KEY</code> e <code>LANGFUSE_HOST</code> em{' '}
-              <code>backend/.env</code>. Sem chaves, opera em modo offline.
-            </p>
-          </div>
-        </section>
-      )}
-
       {/* Layout Principal: Canvas + Inspetor Lateral */}
       <div className="graph-layout">
         <div className="graph-canvas-wrapper" aria-label="Canvas interativo do grafo">
@@ -541,7 +484,6 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
             <span>
               <i className="legend-dot resolver-dot" /> Aguardando Decisão Humana (Interrupt)
             </span>
-            <span className="legend-hint">Clique em qualquer bolinha para inspecionar</span>
           </div>
 
           <svg viewBox="0 0 1060 540" className="agent-graph-svg" role="img" aria-label="Diagrama do Grafo dos Agentes">
