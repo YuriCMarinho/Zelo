@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def sync_settings(self) -> "Settings":
+        if self.database_url.startswith("postgres://"):
+            self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
         if self.llm_mode.lower() == "real":
             self.llm_mode = "featherless"
         if self.langfuse_base_url and (

@@ -42,12 +42,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         run_seed()
     except Exception as e:
         print(f"Aviso durante inicialização do banco/seed: {e}")
+        if settings.environment == "production" and "localhost:5433" in settings.database_url:
+            print(
+                "\n[CONFIGURAÇÃO NECESSÁRIA NO RENDER]:\n"
+                "A variável DATABASE_URL está apontando para 'localhost:5433' (valor padrão local).\n"
+                "No painel do Render (Dashboard -> zelo-smartrepair-ai -> Environment):\n"
+                "1. Adicione a variável DATABASE_URL com a Internal Connection String do PostgreSQL do Render.\n"
+                "2. Ou, para rodar com SQLite temporário imediatamente, defina:\n"
+                "   DATABASE_URL=sqlite:////tmp/smartrepair.db\n"
+            )
     await init_resolver_checkpointer()
     scheduler = None
     if settings.environment != "testing":
-        scheduler = create_provider_scheduler()
-        scheduler.start()
-        set_timeout_scheduler(scheduler)
+        try:
+            scheduler = create_provider_scheduler()
+            scheduler.start()
+            set_timeout_scheduler(scheduler)
+        except Exception as e:
+            print(f"Aviso ao iniciar agendador com banco: {e}. Inicializando com agendador em memória.")
+            try:
+                from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+                mem_scheduler = AsyncIOScheduler(timezone="UTC")
+                mem_scheduler.start()
+                set_timeout_scheduler(mem_scheduler)
+                scheduler = mem_scheduler
+            except Exception:
+                pass
     try:
         yield
     finally:
