@@ -162,7 +162,18 @@ async def route_chat_message(
     if sender_role == ReportedByRole.CLEANER:
         return RouteDestination.MAINTENANCE_NODE2
 
-    # 3. Regra determinística: se o imóvel já tem chamado aberto não resolvido e a mensagem
+    # 3. Uma dúvida comercial explícita não muda de assunto por haver chamado aberto.
+    is_maintenance = _matches_terms(text_lower, MAINTENANCE_TERMS) or bool(
+        MAINTENANCE_REGEX.search(text_lower)
+    )
+    is_commercial = _matches_terms(text_lower, COMMERCIAL_TERMS)
+    explicit_follow_up = re.search(
+        r"\b(t[eé]cnico|prestador|chamado|ticket|reparo|conserto)\b", text_lower
+    )
+    if is_commercial and not is_maintenance and not explicit_follow_up:
+        return RouteDestination.COMMERCIAL_NODE1
+
+    # 4. Regra determinística: se o imóvel já tem chamado aberto não resolvido e a mensagem
     # faz menção a acompanhamento, reparo ou técnico, direciona sem custo ao Nó 2
     if db is not None:
         open_tickets = (
@@ -202,19 +213,14 @@ async def route_chat_message(
             if _matches_terms(text_lower, follow_up_terms):
                 return RouteDestination.MAINTENANCE_NODE2
 
-    # 4. Regras determinísticas por vocabulário explícito
-    is_maintenance = _matches_terms(text_lower, MAINTENANCE_TERMS) or bool(
-        MAINTENANCE_REGEX.search(text_lower)
-    )
-    is_commercial = _matches_terms(text_lower, COMMERCIAL_TERMS)
-
+    # 5. Regras determinísticas por vocabulário explícito
     if is_maintenance and not is_commercial:
         return RouteDestination.MAINTENANCE_NODE2
 
     if is_commercial and not is_maintenance:
         return RouteDestination.COMMERCIAL_NODE1
 
-    # 5. Caso ambíguo: chamada ao modelo de roteamento Qwen3.5-4B
+    # 6. Caso ambíguo: chamada ao modelo de roteamento Qwen3.5-4B
     messages = [
         {
             "role": "system",

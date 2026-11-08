@@ -152,8 +152,27 @@ async def test_router_deterministic_keywords_commercial(db_session: Session) -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (
+            "oi, boa noite. qual o horario de check-in?",
+            RouteDestination.COMMERCIAL_NODE1,
+        ),
+        ("Quando é o check-out?", RouteDestination.COMMERCIAL_NODE1),
+        ("Preciso de ajuda com a senha da internet", RouteDestination.COMMERCIAL_NODE1),
+        (
+            "O técnico já tem previsão de horário para a visita?",
+            RouteDestination.MAINTENANCE_NODE2,
+        ),
+        (
+            "O técnico chega antes do check-in?",
+            RouteDestination.MAINTENANCE_NODE2,
+        ),
+    ],
+)
 async def test_router_deterministic_open_ticket_followup(
-    db_session: Session, sample_property: Property
+    db_session: Session, sample_property: Property, message: str, expected: RouteDestination
 ) -> None:
     """Se o imóvel tem chamado aberto, mensagens de acompanhamento vão ao Nó 2 sem custo de LLM."""
     ticket = MaintenanceTicket(
@@ -171,12 +190,12 @@ async def test_router_deterministic_open_ticket_followup(
 
     dest = await route_chat_message(
         property_id=sample_property.id,
-        message="O técnico já tem previsão de horário para a visita?",
+        message=message,
         sender_role=ReportedByRole.TENANT,
         run_id="run-maint-followup",
         db=db_session,
     )
-    assert dest == RouteDestination.MAINTENANCE_NODE2
+    assert dest == expected
 
 
 @pytest.mark.asyncio
@@ -537,3 +556,57 @@ def test_api_chat_nonexistent_property_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
     data = response.json()
     assert "não encontrado" in data["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_commercial_check_in_uses_property_rules(
+    db_session: Session, sample_property: Property
+) -> None:
+    output = await handle_commercial_message(
+        prop=sample_property,
+        message="qual o horario do check-in?",
+        run_id="run-check-in-faq",
+        db=db_session,
+    )
+    assert output.response_text == "Check-in a partir das 15h."
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rules",
+    [
+        "Não fumar no interior.",
+        "Check-in inteligente via fechadura eletrônica.",
+        "Check-in autônomo 24h. Check-out às 11h.",
+    ],
+)
+async def test_commercial_check_in_does_not_invent_missing_rules(
+    db_session: Session, sample_property: Property, rules: str
+) -> None:
+    sample_property.rules_faq = rules
+    output = await handle_commercial_message(
+        prop=sample_property,
+        message="qual o horario do check-in?",
+        run_id="run-check-in-missing",
+        db=db_session,
+    )
+    assert "não está cadastrado" in output.response_text
+    assert "15h" not in output.response_text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("time", ["15h", "14:30", "16 horas"])
+async def test_commercial_check_in_time_ignores_access_method(
+    db_session: Session, sample_property: Property, time: str
+) -> None:
+    sample_property.rules_faq = (
+        f"Check-in inteligente via fechadura eletrônica. Check-in a partir das {time}. "
+        "Check-out às 11h."
+    )
+    output = await handle_commercial_message(
+        prop=sample_property,
+        message="oi, boa noite. qual o horario de check-in?",
+        run_id="run-check-in-time",
+        db=db_session,
+    )
+    assert output.response_text == f"Check-in a partir das {time}."

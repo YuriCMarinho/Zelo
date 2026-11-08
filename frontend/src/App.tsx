@@ -455,11 +455,11 @@ function PropertyPage({
 export default function App() {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname, window.location.search))
   const [propertiesList, setPropertiesList] = useState<Property[]>(() => [...properties])
-  useEffect(() => { fetchProperties().then(setPropertiesList).catch(() => {}) }, [])
+  useEffect(() => { fetchProperties().then((items) => { setPropertiesList(items); setRoute(parseRoute(window.location.pathname, window.location.search, items)) }).catch(() => {}) }, [])
   const [messages, setMessages] = useState<ChatMessage[]>(() => [...initialMessages])
-  useEffect(() => { const onPopState = () => setRoute(parseRoute(window.location.pathname, window.location.search)); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState) }, [])
+  useEffect(() => { const onPopState = () => setRoute(parseRoute(window.location.pathname, window.location.search, propertiesList)); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState) }, [propertiesList])
   const property = useMemo(() => route.view === 'property' ? propertiesList.find((item) => item.id === route.propertyId) : undefined, [route, propertiesList])
-  function navigate(url: string) { window.history.pushState(null, '', url); setRoute(parseRoute(window.location.pathname, window.location.search)); window.scrollTo?.(0, 0) }
+  function navigate(url: string) { window.history.pushState(null, '', url); setRoute(parseRoute(window.location.pathname, window.location.search, propertiesList)); window.scrollTo?.(0, 0) }
   return (
     <div className="app-shell">
       <Header navigate={navigate} route={route} />
