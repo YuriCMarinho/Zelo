@@ -77,9 +77,11 @@ class LangfuseClientWrapper:
         output_tokens: int,
         cost_usd: float,
         is_mock: bool = True,
+        offline_only: bool = False,
     ) -> SpanRecord:
         """Registra uma geração LLM aplicando mascaramento LGPD e vinculando ao run_id."""
-        self._init_client()
+        if not offline_only:
+            self._init_client()
 
         # Mascara estritamente PII nos dados enviados
         masked_input = mask_dict_pii(messages)
@@ -103,7 +105,7 @@ class LangfuseClientWrapper:
         self._traces.append(span)
 
         # Se houver cliente Langfuse real ativo, envia span com custo explícito
-        if self._client is not None:
+        if self._client is not None and not offline_only:
             try:
                 trace = self._client.trace(id=run_id, name=f"run-{run_id}")
                 trace.generation(

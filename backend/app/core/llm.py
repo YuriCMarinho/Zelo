@@ -1,9 +1,10 @@
-"""Cliente LLM unificado com suporte a Mock determinístico e Featherless API.
+"""Cliente LLM com mock determinístico, respostas gravadas e Featherless API.
 
 Implementa validação estrita de modelos permitidos, verificação obrigatória de max_tokens,
 cálculo e auditoria preventiva de custos, e propagação de telemetria/LGPD via Langfuse.
 """
 
+import asyncio
 import json
 from collections.abc import Sequence
 from enum import Enum
@@ -19,6 +20,7 @@ from app.core.budget import (
     record_call_cost,
 )
 from app.core.config import settings
+from app.demo.replay import replay
 from app.observability.langfuse_client import langfuse_client
 from app.observability.logger import logger
 
@@ -177,7 +179,7 @@ async def generate(
     response_format: type[BaseModel] | None = None,
     db: Any = None,
 ) -> LLMResponse:
-    """Gera uma resposta via LLM (Mock determinístico ou Featherless API).
+    """Gera uma resposta em modo mock, recorded_demo ou Featherless.
 
     Aplica validação rígida de modelo, obrigatoriedade de max_tokens, verificação
     de teto de custo antes da chamada e auditoria no Langfuse / DB.
@@ -200,15 +202,30 @@ async def generate(
 
     # 4. Estimativa preventiva e verificação de teto orçamentário
     # Em modo mock o custo real será 0.0, mas a verificação orçamentária é validada
-    is_mock_mode = settings.llm_mode.lower() == "mock"
+    mode = settings.llm_mode.lower()
+    if mode not in {"mock", "recorded_demo", "featherless"}:
+        raise ValueError(f"LLM_MODE inválido: '{mode}'.")
+    is_mock_mode = mode == "mock"
     cost_to_check = (
-        0.0 if is_mock_mode else estimate_call_cost(model, estimated_input_tokens, max_tokens)
+        0.0
+        if mode != "featherless"
+        else estimate_call_cost(model, estimated_input_tokens, max_tokens)
     )
 
-    check_budget_before_call(run_id=run_id, estimated_cost=cost_to_check, db=db)
+    # A contingência continua disponível quando o orçamento de inferência se esgota.
+    if mode != "recorded_demo":
+        check_budget_before_call(run_id=run_id, estimated_cost=cost_to_check, db=db)
 
     # 5. Execução
-    if is_mock_mode:
+    if mode == "recorded_demo":
+        content = replay(node, model, messages)
+        parsed = response_format.model_validate_json(content) if response_format else None
+        await asyncio.sleep(settings.recorded_demo_latency_ms / 1000)
+        input_tokens = estimated_input_tokens
+        output_tokens = max(1, len(content) // 4)
+        cost_usd = 0.0
+        is_mock = True
+    elif is_mock_mode:
         if response_format is not None:
             parsed = _generate_mock_instance(response_format, node, messages)
             content = parsed.model_dump_json()
@@ -291,6 +308,7 @@ async def generate(
         output_tokens=output_tokens,
         cost_usd=cost_usd,
         is_mock=is_mock,
+        offline_only=mode == "recorded_demo",
     )
 
     logger.info(
@@ -299,6 +317,7 @@ async def generate(
             "run_id": run_id,
             "node": node,
             "model": model,
+            "llm_mode": mode,
             "cost_usd": cost_usd,
             "tokens": input_tokens + output_tokens,
         },

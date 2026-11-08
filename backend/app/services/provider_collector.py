@@ -359,7 +359,7 @@ def reserve_places_call(db: Session, run_id: str, max_calls: int) -> None:
 
 
 def make_collector() -> ProviderCollector:
-    if settings.provider_source == "google_places":
+    if settings.provider_source == "google_places" and settings.llm_mode.lower() != "recorded_demo":
         source: CandidateSource = GooglePlacesAdapter(
             settings.google_places_api_key, max_calls=settings.max_places_calls
         )
@@ -375,7 +375,7 @@ def make_collector() -> ProviderCollector:
         ):
             raise ValueError("PROVIDER_SIMULATED_REPLIES deve ser um objeto JSON de textos")
         gateway = SimulatedContactGateway(allowed, configured_replies)
-    elif settings.provider_source == "fixture":
+    elif settings.provider_source == "fixture" or settings.llm_mode.lower() == "recorded_demo":
         source = FixturePlacesAdapter()
         gateway = SimulatedContactGateway(
             set(FIXTURE_PHONES),
