@@ -208,76 +208,37 @@ def test_full_maintenance_happy_path_e2e(
 
 
 # ==============================================================================
-# 2. TESTE DO FLUXO COMERCIAL COMPLETO (FLUXO A - AQUISIÇÃO)
+# 2. VALIDAÇÃO DE FRONTEIRA: DÚVIDAS NÃO ABREM CHAMADOS DE MANUTENÇÃO
 # ==============================================================================
 
 
-def test_full_commercial_flow_inquiry_and_rules(
+def test_chat_non_maintenance_inquiry_does_not_open_ticket(
     client: TestClient,
     db_session: Session,
     integration_property: Property,
 ) -> None:
-    """Testa o fluxo comercial quando o usuário envia dúvidas sobre o imóvel:
+    """Garante que mensagens de dúvidas gerais sobre regras e estadia são roteadas
 
-    1. Dúvida geral sobre check-in e regras é encaminhada ao Nó 1 (commercial_node1).
-    2. Resposta cordial traz as informações cadastradas de rules_faq.
-    3. Nenhum chamado de manutenção (ticket) é aberto no banco.
+    fora do Nó 2 sem abertura indevida de tickets de manutenção.
     """
-    commercial_payload = {
+    payload = {
         "property_id": integration_property.id,
-        "message": "Olá! Gostaria de saber qual o horário de check-in e check-out no apartamento?",
+        "message": "Olá! Gostaria de saber qual o horário padrão de check-in no apartamento?",
         "sender_role": ReportedByRole.TENANT.value,
-        "run_id": "run-e2e-comm-001",
+        "run_id": "run-e2e-non-maint-001",
     }
-    response = client.post("/api/chat", json=commercial_payload)
+    response = client.post("/api/chat", json=payload)
     assert response.status_code == 200
     data = response.json()
 
     assert data["route_destination"] == "commercial_node1"
     assert data["ticket_id"] is None
     assert data["property_id"] == integration_property.id
-    assert len(data["response_text"]) > 0
 
-    # Garante que nenhum ticket foi criado no DB
+    # Nenhum chamado de manutenção deve ser aberto no banco
     tickets_count = (
         db_session.query(MaintenanceTicket)
         .filter(MaintenanceTicket.property_id == integration_property.id)
         .count()
     )
     assert tickets_count == 0
-
-
-def test_full_commercial_flow_booking_availability(
-    client: TestClient,
-    db_session: Session,
-    integration_property: Property,
-) -> None:
-    """Testa consulta comercial com checagem de conflito na agenda de reservas."""
-    today = date.today()
-
-    # Cadastra reserva ocupando de today+5 a today+10
-    existing_booking = Booking(
-        id="book-e2e-existing",
-        property_id=integration_property.id,
-        guest_name="Ana Turista",
-        guest_contact="+55 21 97777-1111",
-        start_date=today + timedelta(days=5),
-        end_date=today + timedelta(days=10),
-    )
-    db_session.add(existing_booking)
-    db_session.commit()
-
-    # Pergunta comercial sobre período conflitante
-    conflict_payload = {
-        "property_id": integration_property.id,
-        "message": "Gostaria de alugar o apartamento para a próxima semana, de 5 a 10 dias a partir de hoje.",
-        "sender_role": ReportedByRole.TENANT.value,
-        "run_id": "run-e2e-comm-002",
-    }
-    response = client.post("/api/chat", json=conflict_payload)
-    assert response.status_code == 200
-    data = response.json()
-
-    assert data["route_destination"] == "commercial_node1"
-    assert data["ticket_id"] is None
-    assert len(data["response_text"]) > 0

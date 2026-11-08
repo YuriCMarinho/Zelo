@@ -195,3 +195,80 @@ def test_audit_event_persists_safely_without_cleartext_pii(
     assert payload["tenant_email"] == "[EMAIL_REDACTED]"
     assert "98888-9999" not in resp.text
     assert "inquilino@ferias.com.br" not in resp.text
+
+
+# ==============================================================================
+# 5. VERIFICAÇÃO DE MASCARAMENTO NOS LOGS DE APLICAÇÃO (PIIMaskingFilter)
+# ==============================================================================
+
+
+def test_logger_masks_pii_in_log_records(caplog: pytest.LogCaptureFixture) -> None:
+    """Verifica que o PIIMaskingFilter intercepta mensagens de log contendo dados sensíveis
+
+    (telefones, CPFs, tokens) e grava as versões anonimizadas.
+    """
+    import logging
+    from app.observability.logger import PIIMaskingFilter
+
+    test_logger = logging.getLogger("test.lgpd.logger")
+    test_logger.setLevel(logging.INFO)
+    test_logger.addFilter(PIIMaskingFilter())
+
+    with caplog.at_level(logging.INFO, logger="test.lgpd.logger"):
+        test_logger.info(
+            "Hóspede realizou check-in. Telefone: +55 11 98765-4321, CPF: 123.456.789-00."
+        )
+
+    assert len(caplog.records) >= 1
+    log_msg = caplog.records[-1].message
+
+    assert "[TELEFONE_REDACTED]" in log_msg
+    assert "[CPF_REDACTED]" in log_msg
+    assert "98765-4321" not in log_msg
+    assert "123.456.789-00" not in log_msg
+
+
+# ==============================================================================
+# 6. VERIFICAÇÃO DE MASCARAMENTO NOS TRACES/SPANS DO LANGFUSE
+# ==============================================================================
+
+
+def test_langfuse_client_masks_pii_in_recorded_spans() -> None:
+    """Garante que spans enviados ao Langfuse têm entradas e saídas estritamente mascaradas."""
+    from app.observability.langfuse_client import LangfuseClientWrapper
+
+    wrapper = LangfuseClientWrapper()
+    raw_messages = [
+        {"role": "system", "content": "Assistente virtual do imóvel."},
+        {
+            "role": "user",
+            "content": "Meu WhatsApp é +55 21 99999-1234 e CPF 999.888.777-66, favor agendar.",
+        },
+    ]
+    raw_output = "Confirmado para o titular com contato (21) 98888-0000 e email hospede@email.com"
+
+    span = wrapper.record_generation(
+        run_id="run-lgpd-langfuse-001",
+        node="resolver_quote_request",
+        model="Qwen/Qwen3.5-4B",
+        messages=raw_messages,
+        output=raw_output,
+        input_tokens=30,
+        output_tokens=20,
+        cost_usd=0.0001,
+        is_mock=True,
+    )
+
+    # Verifica entrada mascarada
+    input_str = str(span.input_data)
+    assert "[TELEFONE_REDACTED]" in input_str
+    assert "[CPF_REDACTED]" in input_str
+    assert "99999-1234" not in input_str
+    assert "999.888.777-66" not in input_str
+
+    # Verifica saída mascarada
+    output_str = str(span.output_data)
+    assert "[TELEFONE_REDACTED]" in output_str
+    assert "[EMAIL_REDACTED]" in output_str
+    assert "98888-0000" not in output_str
+    assert "hospede@email.com" not in output_str

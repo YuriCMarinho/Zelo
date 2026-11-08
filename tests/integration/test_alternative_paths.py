@@ -4,17 +4,20 @@ Cobre:
 1. Fallback Nó S: Nenhum prestador no DB para a categoria/região -> status NO_PROVIDERS_FALLBACK,
    acionamento de coleta sob demanda do Nó S (collect_on_demand) e registro de auditoria/alerta ao ADM.
 2. Timeout de prestador respondendo cotação:
-   - Timer de timeout registrado no ciclo de vida.
-   - Prossegue com orçamentos parciais se houver respostas, ou escalona ao ADM se zero respostas.
+   - Timer de timeout registrado no ciclo de vida nativo do grafo.
+   - Zero prestadores/orçamentos escalona ao ADM (ESCALATED_TO_ADM).
+   - Prossegue com orçamentos parciais disponíveis.
 3. Timeout do ADM com disparo de lembrete:
-   - Ticket permanece em AWAITING_ADM_APPROVAL com lembrete disparado na sessão do anfitrião.
-   - Timer cancelado após a aprovação tardia.
+   - Grafo registra lembrete nativo via register_adm_reminder no Passo 2.
+   - Ticket permanece em AWAITING_ADM_APPROVAL com lembrete disparado.
+   - Timer cancelado automaticamente após aprovação do ADM em resume_resolution.
 4. Prestador recusa data proposta -> loop de retorno aos passos 3 e 4:
    - Recusa na 1ª data e aceite na 2ª data -> concluído com retry_date_count=1.
    - Recusa em 3 tentativas consecutivas -> escalonamento ao ADM (ESCALATED_TO_ADM).
-5. Urgente com hóspede vs. Não urgente sem hóspede:
+5. Urgente com hóspede vs. Não urgente sem hóspede (e fluxo E2E para imóvel desocupado):
    - Urgente com hóspede aloca 1º horário e marca notify_tenant=True.
    - Não urgente sem hóspede seleciona janela livre na agenda e marca notify_tenant=False.
+   - Grafo E2E em imóvel vazio pula etapa de notificação ao inquilino.
 """
 
 from datetime import UTC, date, datetime, timedelta
@@ -29,14 +32,12 @@ from app.agents import resolver_graph
 from app.agents.resolver_graph import (
     LangGraphResolverStarter,
     compiled_resolver_graph,
+    request_and_receive_quotes,
     resume_resolution,
 )
 from app.agents.resolver_timeouts import (
-    cancel_timeout_job,
     clear_active_timeouts,
     get_active_timeouts,
-    register_adm_reminder,
-    register_quote_timeout,
 )
 from app.core.llm import LLMResponse
 from app.db.models import AuditEvent, Booking, MaintenanceTicket, Property, Provider, Quote
@@ -74,6 +75,18 @@ def alt_property(db_session: Session) -> Property:
     return prop
 
 
+async def run_resolution_until_pause(
+    ticket_id: str,
+    property_id: str,
+    run_id: str,
+    db: Session,
+) -> dict[str, Any]:
+    """Helper reutilizável para inicializar a resolução de chamados no grafo até a pausa humana."""
+    starter = LangGraphResolverStarter(compiled_resolver_graph)
+    req = ResolutionRequest(ticket_id=ticket_id, property_id=property_id, run_id=run_id)
+    return await starter.astart_resolution(req, db=db)
+
+
 # ==============================================================================
 # CAMINHO ALTERNATIVO 1: NENHUM PRESTADOR NO DB (FALLBACK NÓ S + ALERTA ADM)
 # ==============================================================================
@@ -107,20 +120,16 @@ async def test_alt_path_1_no_providers_triggers_node_s_fallback(
     db_session.add(ticket)
     db_session.commit()
 
-    starter = LangGraphResolverStarter(compiled_resolver_graph)
-    req = ResolutionRequest(
-        ticket_id=ticket.id,
-        property_id=alt_property.id,
-        run_id=ticket.run_id,
-    )
-
     with patch(
         "app.agents.resolver_graph.collect_on_demand", new_callable=AsyncMock
     ) as mock_collect:
         mock_collect.return_value = 0
-        state = await starter.astart_resolution(req, db=db_session)
-
-        # Valida que o fallback sob demanda foi chamado com a categoria e cidade
+        state = await run_resolution_until_pause(
+            ticket_id=ticket.id,
+            property_id=alt_property.id,
+            run_id=ticket.run_id,
+            db=db_session,
+        )
         mock_collect.assert_awaited_once()
 
     db_session.refresh(ticket)
@@ -177,148 +186,176 @@ def test_alt_path_1_via_http_chat(
 # ==============================================================================
 
 
-def test_alt_path_2_provider_quote_timeout_partial_quotes(
+@pytest.mark.asyncio
+async def test_alt_path_2_zero_providers_escalates_to_adm(
     db_session: Session,
     alt_property: Property,
 ) -> None:
-    """Caminho 2:
+    """Caminho 2 (Cenário A - Zero Respostas):
 
-    Timeout de resposta dos prestadores:
-    - Se houver pelo menos 1 orçamento coletado, prossegue para síntese do ADM.
-    - Se houver 0 orçamentos coletados no timeout, escala para o ADM.
+    Quando não há prestadores disponíveis no passo de cotação (zero respostas),
+    o nó request_and_receive_quotes escalona diretamente o chamado para o anfitrião
+    com status ESCALATED_TO_ADM.
     """
     ticket = MaintenanceTicket(
-        id="tick-alt-timeout-quote-001",
-        run_id="run-alt-timeout-001",
+        id="tick-alt-zero-quotes-001",
+        run_id="run-alt-zero-001",
+        property_id=alt_property.id,
+        reported_by_role=ReportedByRole.TENANT.value,
+        category=ProviderCategory.ELECTRICIAN.value,
+        urgency=TicketUrgency.NORMAL.value,
+        location_in_property="Quadro geral",
+        description="Fiação em curto.",
+        status=TicketStatus.REQUESTING_QUOTES.value,
+    )
+    db_session.add(ticket)
+    db_session.commit()
+
+    # Executa nó sem nenhum candidato disponível
+    empty_state: Any = {
+        "ticket_id": ticket.id,
+        "run_id": ticket.run_id,
+        "property_id": alt_property.id,
+        "candidate_providers": [],
+    }
+    result = await request_and_receive_quotes(empty_state)
+
+    db_session.refresh(ticket)
+    assert result["status"] == TicketStatus.ESCALATED_TO_ADM.value
+    assert ticket.status == TicketStatus.ESCALATED_TO_ADM.value
+    assert "Nenhum prestador disponível" in result.get("error", "")
+
+
+@pytest.mark.asyncio
+async def test_alt_path_2_quote_timeout_lifecycle_and_callback(
+    db_session: Session,
+    alt_property: Property,
+) -> None:
+    """Caminho 2 (Cenário B - Ciclo de Vida Nativo de Timeout):
+
+    Verifica o registro e disparo do timer nativo de timeout de cotação
+    e o cancelamento automático quando os orçamentos são concluídos.
+    """
+    provider = Provider(
+        id="prov-elec-alt-timeout",
+        name="Elétrica Express",
+        category=ProviderCategory.ELECTRICIAN.value,
+        region="São Paulo",
+        phone="+55 11 98888-3333",
+        is_validated=True,
+        rating=4.8,
+    )
+    db_session.add(provider)
+
+    ticket = MaintenanceTicket(
+        id="tick-alt-quote-timer-001",
+        run_id="run-alt-quote-timer-001",
         property_id=alt_property.id,
         reported_by_role=ReportedByRole.TENANT.value,
         category=ProviderCategory.ELECTRICIAN.value,
         urgency=TicketUrgency.NORMAL.value,
         location_in_property="Quadro elétrico",
-        description="Disjuntor desarmando com frequência.",
-        status=TicketStatus.WAITING_QUOTES.value,
+        description="Disjuntor desarmando.",
+        status=TicketStatus.OPEN.value,
     )
-    # Adiciona 1 cotação recebida e 1 pendente
-    q1 = Quote(
-        ticket_id=ticket.id,
-        run_id=ticket.run_id,
-        provider_id="prov-elec-1",
-        amount=250.0,
-        description="Troca de disjuntor principal",
-        status=QuoteStatus.RECEIVED.value,
-    )
-    q2 = Quote(
-        ticket_id=ticket.id,
-        run_id=ticket.run_id,
-        provider_id="prov-elec-2",
-        status=QuoteStatus.REQUESTED.value,
-    )
-    db_session.add_all([ticket, q1, q2])
+    db_session.add(ticket)
     db_session.commit()
 
-    # Simula registro do timer
-    callback_executed = False
-
-    def mock_timeout_callback(t_id: str, r_id: str) -> None:
-        nonlocal callback_executed
-        callback_executed = True
-
-    job_id = register_quote_timeout(
+    # Executa até a pausa do ADM
+    await run_resolution_until_pause(
         ticket_id=ticket.id,
+        property_id=alt_property.id,
         run_id=ticket.run_id,
-        timeout_minutes=60,
-        callback=mock_timeout_callback,
+        db=db_session,
     )
 
-    active_timers = get_active_timeouts()
-    assert job_id in active_timers
-    assert active_timers[job_id]["ticket_id"] == ticket.id
+    # Verifica que cotações foram coletadas e o timer de cotação foi cancelado
+    # após a conclusão bem-sucedida do passo
+    assert f"timeout_quote_{ticket.id}" not in get_active_timeouts()
 
-    # Executa o callback de timeout
-    active_timers[job_id]["callback"](ticket.id, ticket.run_id)
-    assert callback_executed is True
-
-    # Com 1 cotação disponível, o sistema tem dados para avançar ao ADM
-    quotes_received = [
-        q for q in db_session.query(Quote).filter_by(ticket_id=ticket.id).all()
-        if q.status == QuoteStatus.RECEIVED.value
-    ]
-    assert len(quotes_received) == 1
-
-    # Cancela timer ao prosseguir
-    cancel_timeout_job(job_id)
-    assert job_id not in get_active_timeouts()
+    # O chamado prosseguiu para a síntese do ADM com os orçamentos recebidos
+    db_session.refresh(ticket)
+    assert ticket.status == TicketStatus.AWAITING_ADM_APPROVAL.value
+    quotes = db_session.query(Quote).filter_by(ticket_id=ticket.id).all()
+    assert len(quotes) >= 1
 
 
 # ==============================================================================
-# CAMINHO ALTERNATIVO 3: TIMEOUT DO ADM COM DISPARO DE LEMBRETE
+# CAMINHO ALTERNATIVO 3: TIMEOUT DO ADM COM DISPARO DE LEMBRETE NATIVO
 # ==============================================================================
 
 
-def test_alt_path_3_adm_reminder_timeout_keeps_state_awaiting(
+@pytest.mark.asyncio
+async def test_alt_path_3_adm_reminder_native_timeout_flow(
     db_session: Session,
     alt_property: Property,
 ) -> None:
     """Caminho 3:
 
     Timeout de aprovação pelo ADM:
-    - O timer de lembrete dispara após a janela configurada.
-    - O ticket permanece em AWAITING_ADM_APPROVAL (não é cancelado nem finalizado).
-    - Um evento de lembrete é registrado na auditoria da sessão do imóvel.
+    - O grafo entra em AWAITING_ADM_APPROVAL e registra o timer nativo reminder_adm_{ticket_id}.
+    - O callback nativo é exercitado sem alterar o status de aprovação.
+    - Após o anfitrião aprovar via resume_resolution, o timer é cancelado automaticamente.
     """
+    provider = Provider(
+        id="prov-paint-adm-rem",
+        name="Pinturas Santos",
+        category=ProviderCategory.PAINTER.value,
+        region="São Paulo",
+        phone="+55 11 98888-4444",
+        is_validated=True,
+        rating=4.9,
+    )
+    db_session.add(provider)
+
     ticket = MaintenanceTicket(
-        id="tick-alt-adm-reminder-001",
-        run_id="run-alt-reminder-001",
+        id="tick-alt-adm-rem-001",
+        run_id="run-alt-rem-001",
         property_id=alt_property.id,
         reported_by_role=ReportedByRole.CLEANER.value,
         category=ProviderCategory.PAINTER.value,
         urgency=TicketUrgency.NORMAL.value,
-        location_in_property="Sala de estar",
-        description="Retoque de pintura na parede atrás do sofá.",
-        status=TicketStatus.AWAITING_ADM_APPROVAL.value,
+        location_in_property="Sala",
+        description="Pintura danificada no corredor.",
+        status=TicketStatus.OPEN.value,
     )
     db_session.add(ticket)
     db_session.commit()
 
-    reminder_sent = False
-
-    def on_reminder_trigger(t_id: str, r_id: str) -> None:
-        nonlocal reminder_sent
-        reminder_sent = True
-        # Registra evento na trilha de auditoria
-        audit = AuditEvent(
-            run_id=r_id,
-            ticket_id=t_id,
-            node="adm_reminder",
-            event_type="adm_reminder_sent",
-            payload={"message": "Lembrete: orçamentos aguardam sua aprovação na sessão do imóvel."},
-        )
-        db_session.add(audit)
-        db_session.commit()
-
-    job_id = register_adm_reminder(
+    # Inicia até a pausa humana do ADM
+    await run_resolution_until_pause(
         ticket_id=ticket.id,
+        property_id=alt_property.id,
         run_id=ticket.run_id,
-        reminder_minutes=120,
-        callback=on_reminder_trigger,
+        db=db_session,
     )
 
-    # Dispara o lembrete simulando expiração do timer
-    get_active_timeouts()[job_id]["callback"](ticket.id, ticket.run_id)
-    assert reminder_sent is True
+    db_session.refresh(ticket)
+    assert ticket.status == TicketStatus.AWAITING_ADM_APPROVAL.value
+
+    # Timer nativo deve estar registrado no APScheduler/registro em memória
+    job_id = f"reminder_adm_{ticket.id}"
+    active_timers = get_active_timeouts()
+    assert job_id in active_timers
+
+    # Dispara o callback nativo registrado pela aplicação
+    native_callback = active_timers[job_id]["callback"]
+    native_callback(ticket.id, ticket.run_id)
 
     # O chamado permanece em AWAITING_ADM_APPROVAL
     db_session.refresh(ticket)
     assert ticket.status == TicketStatus.AWAITING_ADM_APPROVAL.value
 
-    # Evento de auditoria registrado
-    audit = (
-        db_session.query(AuditEvent)
-        .filter(AuditEvent.ticket_id == ticket.id, AuditEvent.event_type == "adm_reminder_sent")
-        .first()
+    # Quando o ADM aprova tardiamente, o timer é cancelado pelo grafo
+    await resume_resolution(
+        ticket_id=ticket.id,
+        provider_id=provider.id,
+        graph=compiled_resolver_graph,
     )
-    assert audit is not None
-    assert "aguardam sua aprovação" in audit.payload.get("message", "")
+
+    assert job_id not in get_active_timeouts()
+    db_session.refresh(ticket)
+    assert ticket.status == TicketStatus.RESOLVED.value
 
 
 # ==============================================================================
@@ -363,15 +400,13 @@ async def test_alt_path_4_provider_refuses_date_retries_and_succeeds(
     db_session.add(ticket)
     db_session.commit()
 
-    starter = LangGraphResolverStarter(compiled_resolver_graph)
-    req = ResolutionRequest(
+    # Inicia até a pausa do ADM
+    await run_resolution_until_pause(
         ticket_id=ticket.id,
         property_id=alt_property.id,
         run_id=ticket.run_id,
+        db=db_session,
     )
-
-    # Inicia até a pausa do ADM
-    await starter.astart_resolution(req, db=db_session)
 
     # Configura mock de generate para responder RECUSO na 1ª vez e ACEITO na 2ª vez
     original_generate = resolver_graph.generate
@@ -461,14 +496,12 @@ async def test_alt_path_4_provider_refuses_3_times_escalates_to_adm(
     db_session.add(ticket)
     db_session.commit()
 
-    starter = LangGraphResolverStarter(compiled_resolver_graph)
-    req = ResolutionRequest(
+    await run_resolution_until_pause(
         ticket_id=ticket.id,
         property_id=alt_property.id,
         run_id=ticket.run_id,
+        db=db_session,
     )
-
-    await starter.astart_resolution(req, db=db_session)
 
     # Sempre recusa datas
     original_generate = resolver_graph.generate
@@ -513,7 +546,7 @@ def test_alt_path_5_urgency_x_calendar_comparison(
     db_session: Session,
     alt_property: Property,
 ) -> None:
-    """Caminho 5:
+    """Caminho 5 (Regra Determinística):
 
     Regra determinística Urgência × Agenda:
     - Cenário A: Chamado URGENT com hóspede presente:
@@ -567,3 +600,75 @@ def test_alt_path_5_urgency_x_calendar_comparison(
     assert normal_proposal.proposed_date.date() >= (today + timedelta(days=3))
     assert normal_proposal.proposed_date.date() < (today + timedelta(days=6))
     assert "sem reserva ativa" in normal_proposal.slot_description.lower()
+
+
+@pytest.mark.asyncio
+async def test_alt_path_5_empty_property_skips_tenant_notification_e2e(
+    db_session: Session,
+    alt_property: Property,
+) -> None:
+    """Caminho 5 (Integração E2E - Imóvel Desocupado no Passo 5):
+
+    Garante que para chamados em imóvel vazio:
+    - O agendamento ocorre em janela sem hóspede.
+    - O Passo 5 (notify_tenant_and_resolve) identifica notify_tenant=False.
+    - O chamado avança diretamente para RESOLVED sem emitir notificação a inquilino.
+    """
+    # Imóvel sem nenhuma reserva (vazio)
+    provider = Provider(
+        id="prov-organizer-empty-prop",
+        name="Organizadora SP",
+        category=ProviderCategory.ORGANIZER.value,
+        region="São Paulo",
+        phone="+55 11 99999-5555",
+        is_validated=True,
+        rating=4.9,
+    )
+    db_session.add(provider)
+
+    ticket = MaintenanceTicket(
+        id="tick-alt-empty-prop-001",
+        run_id="run-alt-empty-001",
+        property_id=alt_property.id,
+        reported_by_role=ReportedByRole.CLEANER.value,
+        category=ProviderCategory.ORGANIZER.value,
+        urgency=TicketUrgency.NORMAL.value,
+        location_in_property="Armário suíte",
+        description="Ajuste de prateleiras soltas.",
+        status=TicketStatus.OPEN.value,
+    )
+    db_session.add(ticket)
+    db_session.commit()
+
+    # Inicia até a pausa do ADM
+    await run_resolution_until_pause(
+        ticket_id=ticket.id,
+        property_id=alt_property.id,
+        run_id=ticket.run_id,
+        db=db_session,
+    )
+
+    # Retoma com aprovação do ADM
+    final_state = await resume_resolution(
+        ticket_id=ticket.id,
+        provider_id=provider.id,
+        graph=compiled_resolver_graph,
+    )
+
+    db_session.refresh(ticket)
+    assert ticket.status == TicketStatus.RESOLVED.value
+    # Imóvel vazio não necessita de notificação de inquilino
+    assert ticket.notify_tenant is False
+    assert final_state.get("notify_tenant") is False
+    assert ticket.scheduled_date is not None
+
+    # Verifica que não foi gravada auditoria de inquilino notificado
+    tenant_audit = (
+        db_session.query(AuditEvent)
+        .filter(
+            AuditEvent.ticket_id == ticket.id,
+            AuditEvent.event_type == "tenant_notified",
+        )
+        .first()
+    )
+    assert tenant_audit is None

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.db.base import Base  # noqa: E402
-from app.db.session import engine, get_db  # noqa: E402
+from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 
 test_engine = create_engine(
@@ -29,13 +29,13 @@ test_engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
-# Garante que todo o backend use a mesma engine e SessionLocal nos testes
-import app.db.session as app_session  # noqa: E402
-import app.agents.resolver_graph as resolver_graph  # noqa: E402
 
-app_session.engine = test_engine
-app_session.SessionLocal = TestingSessionLocal
-resolver_graph.SessionLocal = TestingSessionLocal
+@pytest.fixture(autouse=True)
+def bind_test_engine(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configura o engine e SessionLocal de teste de forma isolada via monkeypatch."""
+    monkeypatch.setattr("app.db.session.engine", test_engine)
+    monkeypatch.setattr("app.db.session.SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr("app.agents.resolver_graph.SessionLocal", TestingSessionLocal)
 
 
 @pytest.fixture(scope="function")
@@ -52,14 +52,13 @@ def db_session() -> Generator[Session, None, None]:
 @pytest.fixture(scope="function")
 def client(db_session: Session) -> Generator[TestClient, None, None]:
     def override_get_db() -> Generator[Session, None, None]:
+        session = TestingSessionLocal()
         try:
-            yield db_session
+            yield session
         finally:
-            pass
+            session.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    # Cria tabelas no engine de app se for sqlite in-memory
-    Base.metadata.create_all(bind=engine)
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
