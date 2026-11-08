@@ -10,6 +10,26 @@ const request = { propertyId: 'prop-copacabana-01', message: 'qual o horario do 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('atendimento conectado ao backend', () => {
+  it.each(['guest', 'cleaner'] as const)('restaura usuário e assistente no canal %s sem duplicar', async (channel) => {
+    vi.useFakeTimers()
+    const prop = properties[0]!
+    const sender = channel === 'cleaner' ? 'camareira' : 'hospede'
+    const records = [
+      { id: 'saved-user', property_id: prop.id, channel, sender, body: 'Minha pergunta' },
+      { id: 'saved-agent', property_id: prop.id, channel, sender: 'agent', body: 'Minha resposta' },
+      { id: 'wrong-channel', property_id: prop.id, channel: channel === 'guest' ? 'cleaner' : 'guest', sender, body: 'Outro canal' },
+    ].map((item) => ({ ...item, created_at: new Date().toISOString() }))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(records)))))
+    const onNewMessage = vi.fn()
+    render(<ChatPanel property={prop} messages={[]} onNewMessage={onNewMessage} />)
+    if (channel === 'cleaner') fireEvent.click(screen.getByRole('button', { name: 'Camareira' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(onNewMessage.mock.calls.map(([item]) => item.sender)).toEqual([sender, 'agent'])
+    expect(onNewMessage.mock.calls.map(([item]) => item.id)).toEqual(['saved-user', 'saved-agent'])
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(onNewMessage).toHaveBeenCalledTimes(2)
+  })
+
   it.each([
     { response: 'Olá!', delay: 4300, apiTime: 0 },
     { response: 'a'.repeat(100), delay: 4450, apiTime: 0 },
