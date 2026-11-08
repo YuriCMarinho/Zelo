@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.commercial import handle_commercial_message
 from app.agents.router import route_chat_message
-from app.agents.validator import handle_maintenance_message
+from app.agents.validator import handle_maintenance_message, maintenance_social_reply
 from app.db.models import ChatMessageRecord, Property
 from app.db.session import get_db
 from app.schemas.chat import ChatHistoryItem, ChatMessageInput, ChatMessageOutput
@@ -193,6 +193,8 @@ async def process_chat_message(
         if ticket_id is not None
         else ["Informar cômodo e item com defeito", "Descrever gravidade do problema"]
     )
+    if maintenance_social_reply(input_data.message) is not None:
+        suggested = []
 
     agent_record = ChatMessageRecord(
         property_id=prop.id,

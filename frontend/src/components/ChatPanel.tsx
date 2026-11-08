@@ -63,6 +63,7 @@ export function ChatPanel({
 
   // Sincroniza notificações automáticas do anfitrião (ex: aprovação ou recusa da reserva)
   useEffect(() => {
+    if (loading) return
     let active = true
     async function syncHistory() {
       const history = await fetchChatHistory(property.id, activeChannel, sessionId)
@@ -104,7 +105,7 @@ export function ChatPanel({
       active = false
       window.clearInterval(timer)
     }
-  }, [property.id, activeChannel, sessionId, messages, onNewMessage])
+  }, [property.id, activeChannel, sessionId, messages, onNewMessage, loading])
 
   async function submitText(rawText: string) {
     const text = rawText.trim()
@@ -122,7 +123,7 @@ export function ChatPanel({
     }
     onNewMessage(userMsg)
     setDraft('')
-    const initialPause = 300 + Math.random() * 200
+    const initialPause = 3000 + Math.random() * 2000
     typingDelayRef.current = initialPause
     setLoading(true)
     setError('')

@@ -11,12 +11,13 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstub
 
 describe('atendimento conectado ao backend', () => {
   it.each([
-    { response: 'Olá!', delay: 700, apiTime: 0 },
-    { response: 'a'.repeat(100), delay: 850, apiTime: 0 },
-    { response: 'a'.repeat(400), delay: 1100, apiTime: 0 },
-    { response: 'Olá!', delay: 800, apiTime: 500 },
-    { response: 'Olá!', delay: 1300, apiTime: 1000 },
-    { response: 'a'.repeat(100), delay: 1450, apiTime: 1000 },
+    { response: 'Olá!', delay: 4300, apiTime: 0 },
+    { response: 'a'.repeat(100), delay: 4450, apiTime: 0 },
+    { response: 'a'.repeat(400), delay: 4700, apiTime: 0 },
+    { response: 'Olá!', delay: 4300, apiTime: 500 },
+    { response: 'Olá!', delay: 4300, apiTime: 1000 },
+    { response: 'a'.repeat(100), delay: 4450, apiTime: 1000 },
+    { response: 'Olá!', delay: 6300, apiTime: 6000 },
   ])('aguarda $delay ms com API de $apiTime ms e mantém a digitação ágil', async ({ response, delay, apiTime }) => {
     vi.useFakeTimers()
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
@@ -36,11 +37,11 @@ describe('atendimento conectado ao backend', () => {
     expect(onNewMessage).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('Digitando resposta...')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled()
-    await act(async () => { await vi.advanceTimersByTimeAsync(399) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3999) })
     expect(screen.queryByText('Digitando resposta...')).not.toBeInTheDocument()
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(screen.getByText('Digitando resposta...')).toBeInTheDocument()
-    await act(async () => { await vi.advanceTimersByTimeAsync(delay - 401) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(delay - 4001) })
     expect(onNewMessage).toHaveBeenCalledTimes(1)
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(onNewMessage).toHaveBeenCalledTimes(2)
