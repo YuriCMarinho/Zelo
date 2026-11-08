@@ -1,5 +1,12 @@
 import os
+import sys
 from collections.abc import Generator
+from pathlib import Path
+
+# Garante que o diretório backend esteja no sys.path mesmo ao rodar caminhos relativos
+backend_dir = Path(__file__).resolve().parent.parent / "backend"
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 # Configura banco em memória antes de qualquer importação de app/engine
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -21,6 +28,14 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+# Garante que todo o backend use a mesma engine e SessionLocal nos testes
+import app.db.session as app_session  # noqa: E402
+import app.agents.resolver_graph as resolver_graph  # noqa: E402
+
+app_session.engine = test_engine
+app_session.SessionLocal = TestingSessionLocal
+resolver_graph.SessionLocal = TestingSessionLocal
 
 
 @pytest.fixture(scope="function")

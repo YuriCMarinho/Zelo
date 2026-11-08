@@ -47,7 +47,7 @@ INJECTION_PATTERNS = [
     ),
     (
         re.compile(
-            r"(?i)\b(finja\s+que\s+voc[êe]\s+[ée]|aja\s+como|agora\s+voc[êe]\s+[ée]|modo\s+dan|desbloqueado)\b"
+            r"(?i)\b((?:finja|pretend[ae])\s+que\s+voc[êe]\s+[ée]|aja\s+como|agora\s+voc[êe]\s+[ée]|modo\s+dan|desbloqueado)\b"
         ),
         "Sequestro de persona (Português)",
     ),

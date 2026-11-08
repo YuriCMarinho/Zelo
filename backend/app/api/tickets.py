@@ -29,6 +29,7 @@ def list_tickets(
     property_id: str | None = None,
     status_filter: TicketStatus | None = None,
 ) -> list[MaintenanceTicket]:
+    db.expire_all()
     query = db.query(MaintenanceTicket)
     if property_id:
         query = query.filter(MaintenanceTicket.property_id == property_id)
@@ -47,6 +48,7 @@ def get_ticket(
     ticket_id: str,
     db: DatabaseDep,
 ) -> MaintenanceTicket:
+    db.expire_all()
     ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(
