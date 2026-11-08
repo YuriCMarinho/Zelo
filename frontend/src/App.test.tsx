@@ -119,4 +119,17 @@ describe('navegação por imóvel', () => {
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
     expect(screen.queryByText('Resetar Dados da Demonstração?')).not.toBeInTheDocument()
   })
+
+  it('abre o menu mobile pelas 3 linhas e navega até reservas', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const menuBtn = screen.getByRole('button', { name: 'Abrir menu de navegação' })
+    expect(menuBtn).toBeInTheDocument()
+    await user.click(menuBtn)
+    expect(screen.getByRole('navigation', { name: 'Navegação mobile' })).toBeInTheDocument()
+    const mobileLinks = screen.getAllByRole('link', { name: 'Reservas' })
+    await user.click(mobileLinks[mobileLinks.length - 1]!)
+    expect(screen.getByRole('button', { name: '+ Nova reserva' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Navegação mobile' })).not.toBeInTheDocument()
+  })
 })

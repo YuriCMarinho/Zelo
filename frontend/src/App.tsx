@@ -24,6 +24,7 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleReset = async () => {
     setIsResetting(true)
@@ -37,20 +38,22 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
     }
   }
 
+  const navItems = [
+    { url: '/', label: 'Meus imóveis', view: 'listing' },
+    { url: '/reservas', label: 'Reservas', view: 'reservas' },
+    { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
+    { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
+    { url: '/auditoria', label: 'Auditoria', view: 'auditoria' },
+  ]
+
   return (
     <header className="site-header">
       <div className="header-inner">
         <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }} aria-label="Zelo, ir para imóveis">
           <ZeloMark /><span>zelo<small>QUEBROU? A GENTE RESOLVE.</small></span>
         </a>
-        <nav className="header-nav" aria-label="Navegação principal">
-          {[
-            { url: '/', label: 'Meus imóveis', view: 'listing' },
-            { url: '/reservas', label: 'Reservas', view: 'reservas' },
-            { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
-            { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
-            { url: '/auditoria', label: 'Auditoria', view: 'auditoria' },
-          ].map((item) => (
+        <nav className="header-nav desktop-nav" aria-label="Navegação principal">
+          {navItems.map((item) => (
             <a
               key={item.url}
               href={item.url}
@@ -71,8 +74,48 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
             ↻ Resetar Demo
           </button>
           <div className="avatar" aria-label="Perfil do anfitrião">A</div>
+          <button
+            type="button"
+            className={`mobile-menu-btn ${mobileMenuOpen ? 'open' : ''}`}
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label={mobileMenuOpen ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
+            aria-expanded={mobileMenuOpen}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              {mobileMenuOpen ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
         </div>
       </div>
+      {mobileMenuOpen && (
+        <nav className="mobile-nav-drawer page-width" aria-label="Navegação mobile">
+          {navItems.map((item) => (
+            <a
+              key={item.url}
+              href={item.url}
+              aria-current={route.view === item.view || (route.view === 'property' && item.view === 'listing') ? 'page' : undefined}
+              onClick={(event) => {
+                event.preventDefault()
+                setMobileMenuOpen(false)
+                navigate(item.url)
+              }}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+      )}
       {showConfirm && (
         <div className="demo-reset-modal-overlay" role="dialog" aria-modal="true">
           <div className="demo-reset-modal">
