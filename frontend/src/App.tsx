@@ -356,6 +356,16 @@ function QuotesPanel({ property, navigate }: { property: Property; navigate: (ur
   )
 }
 
+function getPropertyState(property: Property): string {
+  const loc = `${property.location} ${property.neighborhood} ${property.id}`.toLowerCase()
+  if (loc.includes('recife') || loc.includes('pernambuco') || loc.includes('portodigital')) return 'PERNAMBUCO'
+  if (loc.includes('rio de janeiro') || loc.includes('copacabana')) return 'RIO DE JANEIRO'
+  if (loc.includes('são paulo') || loc.includes('sao paulo') || loc.includes('madalena')) return 'SÃO PAULO'
+  if (loc.includes('gramado') || loc.includes('serra gaúcha') || loc.includes('gaucha')) return 'RIO GRANDE DO SUL'
+  if (loc.includes('ceará') || loc.includes('ceara') || loc.includes('cumbuco') || loc.includes('fortaleza')) return 'CEARÁ'
+  return ''
+}
+
 function PropertyPage({
   property,
   tab,
@@ -369,6 +379,7 @@ function PropertyPage({
   messages: ChatMessage[]
   sendMessage: (message: ChatMessage) => void
 }) {
+  const stateName = getPropertyState(property)
   return (
     <main className="page-width detail-page">
       <div className="breadcrumb" style={{ justifyContent: 'space-between' }}>
@@ -398,6 +409,9 @@ function PropertyPage({
       </div>
       <div className="detail-intro">
         <div>
+          <span className="eyebrow">
+            {property.neighborhood.toLocaleUpperCase('pt-BR')}{stateName ? ` · ${stateName}` : ''}
+          </span>
           <h1>{property.title}</h1>
           <p className="tabular-nums">
             <span className="rating">★ {property.rating.toFixed(2)}</span> <span className="dot-sep">·</span>{' '}
