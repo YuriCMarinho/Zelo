@@ -3,6 +3,7 @@ import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
+import { AgentGraphView } from './components/AgentGraphView'
 import { fetchProperties, resetDemoData } from './api/client'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
@@ -40,6 +41,7 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
 
   const navItems = [
     { url: '/', label: 'Meus imóveis', view: 'listing' },
+    { url: '/agentes', label: 'Grafo de Agentes', view: 'agentes' },
     { url: '/reservas', label: 'Reservas', view: 'reservas' },
     { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
     { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
@@ -253,6 +255,10 @@ export default function App() {
       {route.view === 'auditoria' ? (
         <main className="page-width detail-page">
           <AuditPanel />
+        </main>
+      ) : route.view === 'agentes' ? (
+        <main className="page-width detail-page">
+          <AgentGraphView navigate={navigate} propertiesList={propertiesList} />
         </main>
       ) : route.view === 'property' && property ? (
         <PropertyPage
