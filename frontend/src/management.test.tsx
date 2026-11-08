@@ -10,9 +10,10 @@ beforeEach(() => { localStorage.clear(); window.history.replaceState(null, '', '
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); window.history.replaceState(null, '', '/') })
 const nextYear = new Date().getFullYear() + 1
 
+// delay: null tira o setTimeout por tecla; com ele, o 1º teste passava de 5 s na suíte completa.
 describe('telas de gestão', () => {
   it('valida datas, cria uma reserva, impede conflitos e persiste os dados', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     window.history.replaceState(null, '', '/reservas')
     render(<App />)
     async function fill(guest: string, start: string, end: string) {
@@ -45,7 +46,7 @@ describe('telas de gestão', () => {
   })
 
   it('cria um chamado e acompanha até a conclusão', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     window.history.replaceState(null, '', '/manutencao')
     render(<App />)
     await user.click(screen.getByRole('button', { name: '+ Novo chamado' }))
@@ -63,7 +64,7 @@ describe('telas de gestão', () => {
   })
 
   it('salva preferências e desfaz mudanças não salvas', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     window.history.replaceState(null, '', '/configuracoes')
     render(<App />)
     await user.clear(screen.getByLabelText('Nome'))

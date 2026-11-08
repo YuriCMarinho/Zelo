@@ -112,12 +112,13 @@ def run_seed(db: Session | None = None) -> dict[str, int]:
                     id=prop_recife_id,
                     name="Studio Tech Porto Digital - Recife Antigo",
                     description=(
-                        "Studio moderno e tecnológico no coração do Porto Digital, "
-                        "a 200m do Marco Zero e dos armazéns criativos do Recife Antigo. "
-                        "Equipado com internet dedicada de 500Mbps, workstation com monitor "
-                        "externo, fechadura inteligente 24h, ar-condicionado inverter silencioso "
+                        "Studio moderno e tecnológico no coração do Porto Digital, a 200m do "
+                        "Marco Zero e dos armazéns criativos do Recife Antigo. Equipado com "
+                        "internet dedicada de 500Mbps, workstation com monitor externo, "
+                        "fechadura inteligente 24h, ar-condicionado inverter silencioso "
                         "e vista para o Rio Capibaribe. Perfeito para nômades digitais, "
-                        "imersões de tecnologia, hackathons ou estadias de final de semana."
+                        "imersões de tecnologia, "
+                        "hackathons ou estadias produtivas de final de semana."
                     ),
                     address="Cais do Apolo, 222 - Bairro do Recife",
                     city="Recife",
