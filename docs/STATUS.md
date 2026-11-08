@@ -1,6 +1,6 @@
 # Status do Projeto — Fonte da Verdade (`STATUS.md`)
 
-Atualizado em: `2026-11-07` (alinhado a `docs/PLAN.md` como fonte única da verdade).
+Atualizado em: `2026-11-08` (alinhado a `docs/PLAN.md` como fonte única da verdade).
 
 Estados permitidos: **não iniciada** | **em andamento** | **em revisão** | **aprovada** | **bloqueada**.
 **Versão canônica: a de `develop`.** As cópias em `main` e nas branches de task podem estar defasadas; leia sempre `git show origin/develop:docs/STATUS.md`.
@@ -31,7 +31,7 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | **S2-T5** Roteador Barato + Nó 1 (Comercial) + Nó 2 (Validador) | Implementação | **aprovada** | Dev 1 + Implementador / Revisor | `develop` (via PR #5) | `fe163f1` | Roteador barato com regra de custo zero para chamado aberto/cleaner, Nó 1 com checagem de conflito de datas e Nó 2 com extração tipada Pydantic integrado em develop (67 testes, 93.47% cobertura). |
 | **S2-T6** Fluxo C — Nó 3 (Resolvedor em LangGraph + Urgência × Agenda) | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `develop` (via PR #6) | — | Grafo de 5 passos do Nó 3 em LangGraph com PostgresSaver, interrupt/resume para ADM, agendamento determinístico Urgência × Agenda (100% cobr.), timeouts integrados no ciclo de vida, fallback Nó S enfileirado e endpoints HTTP em /api/tickets (99 testes, 92% cobertura global). |
 | **S2-T7** Integração Frontend (Sessão Agente ⇄ Anfitrião + Simulador) | Implementação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR #7) | `b4852bd` | Conexão UI às APIs (Chat, Orçamentos, Aprovação ADM, Simulador e Auditoria) com Design System Zelo, 102 testes backend (92.3% cobr.) e 6 testes frontend verdes. |
-| **S2-T14** Fluxo Real do Prestador no Nó 3 (espera, timeouts, fallback e aviso) | Implementação | **em revisão** | Dev 3 + Implementador / Revisor | `feature/s2-t14-provider-real-flow` | — | Depende de S1-T13 (PR #9, mesclado). Corrige os itens críticos da auditoria da develop: orçamentos e devolutiva inventados pelo LLM, aviso ao hóspede descartado, timers que não disparavam e fallback que travava o ticket. |
+| **S2-T14** Fluxo Real do Prestador no Nó 3 (espera, timeouts, fallback e aviso) | Implementação | **aprovada** | Dev 3 + Implementador / Revisor | `feature/s2-t14-provider-real-flow` | `db5ff69` | Fluxo do prestador acessível na sessão ADM, respostas pelos endpoints, aprovação sem sucesso fictício, atualização automática e retomada segura após coleta. Validado com 196 testes backend (92,01% cobertura) e 56 testes frontend; detalhes na seção 4. |
 | **S2-T8** Testes de Integração (Caminhos Alternativos) e Suíte de Segurança | Implementação | **aprovada** | Dev 4 + Implementador / Revisor | `develop` (via PR #8) | `f9af095` | Suíte completa com 162 testes verdes (92.5% cobertura), cobrindo caminho feliz, 5 caminhos alternativos, 100% prompt injection bloqueado e LGPD verificado. |
 | **S3-T9** Testes E2E com Modelos Reais (Featherless) e Recalibração de Custo | Validação | **aprovada** | Dev 1 + Implementador / Revisor | `develop` (via PR #10) | `6cc7440` | Bateria E2E sob marcador @pytest.mark.real_llm, telemetria Langfuse e Seção 9 de calibração empírica no COST.md concluídas e integradas em develop (165 testes verdes, 92.5% cobr.). |
 | **S3-T10** Deploy do Link Testável + Seed/Reset para Avaliadores | Validação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR #12) | `ce22307` | Container Docker unificado multi-stage testado (FastAPI + React SPA), endpoint POST /api/demo/reset funcional, botão e modal no frontend e docs/DEPLOY.md concluídos (166 testes backend, 11 testes frontend). |
@@ -54,3 +54,28 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 5. **Stack Técnica:** Python 3.12, FastAPI, Pydantic v2, LangGraph (no Nó 3), APScheduler, PostgreSQL, React + TypeScript, Langfuse, cobertura mínima de **70% no código novo**.
 6. **Desafio Tako:** Não concorre (foco 100% em imóveis de temporada).
 7. **LGPD:** Telefones de prestadores e dados pessoais de hóspedes ficam apenas no PostgreSQL e são mascarados antes de logs e traces do Langfuse.
+
+---
+
+## 4. Revisão da S2-T14 — 2026-11-08
+
+**Veredito: aprovada na revisão do commit `db5ff69`, na branch `feature/s2-t14-provider-real-flow`.** Os oito critérios de aceite da S2-T14 foram atendidos na implementação, incluindo a correção da coleta rápida do Nó S e as três correções da interface. A publicação do código não representa validação de um deploy remoto.
+
+| Critério do `PLAN.md` | Resultado |
+| --- | --- |
+| 1. Valores de orçamento vêm da resposta do prestador | Atendido no backend: pedidos começam com `amount=null`; preço e resposta são registrados pelo endpoint do prestador. |
+| 2. Confirmação/recusa de data e escalonamento após 3 recusas | Atendido no backend e coberto pelos testes do resolvedor. |
+| 3. Timeouts pelo APScheduler retomam o grafo | Implementado; callback assíncrono também verificado com um APScheduler real. Os jobs atuais são mantidos em memória e não são recuperados após reinício do processo. |
+| 4. Coleta assíncrona e retomada quando surge prestador | Corrigido: a coleta começa após a persistência da pausa do grafo, evitando perder `providers_ready`. Teste de regressão adicionado. |
+| 5. `tenant_notified` somente quando houver hóspede | Atendido no backend, com testes para imóvel ocupado e vazio. A exibição persistente desse aviso no chat é uma integração adicional da S2-T7. |
+| 6. Guardrail para texto do prestador | Implementado nos endpoints de orçamento e devolutiva de data; bloqueio de injection coberto nos testes. |
+| 7. Transições de estado validadas | Implementado com `_set_status` e `is_valid_ticket_transition`. |
+| 8. Simulador da UI responde como prestador | Implementado no painel “Ações do prestador (demonstração)” da sessão Agente ⇄ Anfitrião; envia orçamentos e aceita/recusa datas pelos endpoints reais. |
+
+Correções da revisão incluídas no commit `db5ff69`:
+
+1. `ProviderSimulator` está acessível na sessão Agente ⇄ Anfitrião, com apenas ações de prestador no painel de demonstração. Envio de orçamento e aceite/recusa usam os endpoints do chamado; aprovação continua separada, como ação do anfitrião. Três recusas exibem o escalonamento real ao anfitrião.
+2. `approveQuote` e `startTicketResolution` propagam erros de rede, HTTP e respostas inválidas sem fabricar sucesso. Foram removidos os chamados/orçamentos fictícios de `PropertyWorkspace` e o aviso de agendamento fabricado pela aprovação.
+3. `PropertyWorkspace` consulta chamado e orçamentos a cada 5 segundos, ao voltar à janela, trocar de aba e após ações locais. A data exibida vem do chamado confirmado; requisições antigas não atualizam componentes desmontados e os timers são cancelados na saída.
+
+Validação atual: **56 testes do frontend aprovados**, incluindo o ciclo orçamento → aprovação → recusa/aceite → visita confirmada, falhas HTTP/rede e atualização externa com limpeza dos timers; build, TypeScript e lint aprovados. Última suíte completa do backend: **196 testes aprovados, 4 testes pagos pulados e 92,01% de cobertura**; teste adicional de disparo real do APScheduler aprovado. Recuperação de timers após reinício e integração persistente dos avisos ao chat continuam fora destas três correções.
