@@ -149,6 +149,7 @@ Critério de qualidade: validar com exemplos em português garantindo ≥95% de 
   - Antes da S3 (envelope de desenvolvimento US$ 17,50): **50%** = US$ 8,75 · **75%** = US$ 13,13 · **90%** = US$ 15,75 · **100%** = US$ 17,50 (corte; a reserva fica intocada).
   - Na S3 (reserva US$ 7,50 liberada): **50%** = US$ 3,75 · **75%** = US$ 5,63 · **90%** = US$ 6,75 · **100%** = US$ 7,50.
   - Também por sprint: 50/75/90% do teto da sprint atual.
+  - **Implementação:** `active_budget_envelope()` em `backend/app/core/budget.py`. A reserva só é liberada com `BUDGET_RESERVE_UNLOCKED=true` (decisão do time no início da S3); `BUDGET_RESERVE_USD` vale 7,50 por padrão. Os tetos por sprint ainda não estão no código.
   - **100%:** bloqueio imediato (`BudgetExceededError`) com fallback gracioso no painel.
 - **Preços da Featherless no Langfuse (obrigatório):**
   - Como os modelos da Featherless não possuem tabela nativa de preços no Langfuse, o sistema deve:
