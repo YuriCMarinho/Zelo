@@ -63,13 +63,34 @@ export const properties: readonly Property[] = [
     ],
     tag: 'Refúgio à beira-mar',
   },
+  {
+    id: 'prop-portodigital-04',
+    title: 'Studio Tech Porto Digital',
+    location: 'Cais do Apolo, 222 - Bairro do Recife, Recife',
+    neighborhood: 'Recife Antigo',
+    description: 'Studio contemporâneo no coração do Porto Digital, a passos do Marco Zero e dos armazéns criativos. Workstation com monitor externo, internet fibra 500Mbps, ar-condicionado inverter silencioso e vista para o Rio Capibaribe. Perfeito para hackathons, nômades digitais e fins de semana no polo de inovação.',
+    image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1400&q=85',
+    gallery: [
+      'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&q=85',
+      'https://images.unsplash.com/photo-1517502884422-41eaead166d4?w=900&q=85',
+    ],
+    nightlyRate: 280, guests: 2, bedrooms: 1, beds: 1, baths: 1, rating: 4.98, reviews: 94,
+    amenities: ['Wi-Fi 500Mbps dedicado', 'Workstation ergonômica', 'Ar-condicionado Inverter', 'Fechadura 24h autônoma', 'Copa Gourmet', 'Vista Capibaribe'],
+    occupancy: [
+      { startDate: day(5), endDate: day(8), status: 'reserved', label: 'Imersão Tech Reserva' },
+      { startDate: day(18), endDate: day(21), status: 'reserved', label: 'Hackathon Weekend' },
+    ],
+    tag: 'Porto Digital · Recife',
+  },
 ]
 
 export const initialMessages: readonly ChatMessage[] = [
   { id: 'welcome-casa', propertyId: 'casa-aurora', channel: 'guest', sender: 'agent', body: 'Olá! Sou a assistente da Casa Aurora. Posso ajudar com dúvidas sobre a estadia ou receber um relato de manutenção. Como posso ajudar?', time: '09:41' },
   { id: 'welcome-loft', propertyId: 'loft-jardim', channel: 'guest', sender: 'agent', body: 'Olá! Bem-vindo ao Loft Jardim. Conte comigo para dúvidas sobre o espaço ou para relatar algum problema.', time: '09:41' },
   { id: 'welcome-vila', propertyId: 'vila-areia', channel: 'guest', sender: 'agent', body: 'Olá! Sou a assistente da Vila Areia. Como posso ajudar com sua estadia?', time: '09:41' },
+  { id: 'welcome-recife', propertyId: 'prop-portodigital-04', channel: 'guest', sender: 'agent', body: 'Olá! Bem-vindo ao Studio Tech Porto Digital no Bairro do Recife! Como posso ajudar com sua estadia, internet de alta velocidade ou comodidades no polo de inovação?', time: '09:41' },
   { id: 'adm-casa', propertyId: 'casa-aurora', channel: 'admin', sender: 'agent', body: 'Olá, anfitrião! Esta é a sessão reservada para decisões sobre manutenção da Casa Aurora. Novos orçamentos e pedidos de aprovação aparecerão aqui.', time: '09:42' },
   { id: 'adm-loft', propertyId: 'loft-jardim', channel: 'admin', sender: 'agent', body: 'Olá, anfitrião! Esta sessão acompanha os tickets e as decisões de manutenção do Loft Jardim.', time: '09:42' },
   { id: 'adm-vila', propertyId: 'vila-areia', channel: 'admin', sender: 'agent', body: 'Olá, anfitrião! Esta sessão acompanha os tickets e as decisões de manutenção da Vila Areia.', time: '09:42' },
+  { id: 'adm-recife', propertyId: 'prop-portodigital-04', channel: 'admin', sender: 'agent', body: 'Olá, anfitrião! Esta é a sessão para acompanhar o Studio Tech Porto Digital. Decisões de manutenção e cotações com prestadores locais do Recife Antigo aparecerão aqui.', time: '09:42' },
 ]

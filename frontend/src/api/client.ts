@@ -17,12 +17,19 @@ export async function fetchProperties(): Promise<Property[]> {
     if (Array.isArray(data) && data.length > 0) {
       // Mapeia para o contrato de Property da UI
       return data.map((item: Record<string, unknown>, index: number) => {
-        const fallback = (defaultProperties[index % defaultProperties.length] ?? defaultProperties[0])!
+        const matched = defaultProperties.find((p) => p.id === item.id)
+        const fallback = matched || (defaultProperties[index % defaultProperties.length] ?? defaultProperties[0])!
+        const isRecife =
+          String(item.city || '').toLowerCase().includes('recife') ||
+          String(item.id || '').includes('recife') ||
+          String(item.id || '').includes('portodigital')
         return {
           id: String(item.id || fallback.id),
           title: String(item.name || item.title || fallback.title),
-          location: item.address ? `${String(item.address)}, ${String(item.city || 'Fortaleza')}` : fallback.location,
-          neighborhood: String(item.neighborhood || fallback.neighborhood),
+          location: item.address
+            ? `${String(item.address)}, ${String(item.city || 'Recife')}`
+            : fallback.location,
+          neighborhood: String(item.neighborhood || (isRecife ? 'Recife Antigo' : fallback.neighborhood)),
           description: String(item.description || fallback.description),
           image: fallback.image,
           gallery: fallback.gallery,
@@ -35,7 +42,7 @@ export async function fetchProperties(): Promise<Property[]> {
           reviews: fallback.reviews,
           amenities: fallback.amenities,
           occupancy: fallback.occupancy,
-          tag: fallback.tag,
+          tag: isRecife ? 'Porto Digital · Recife' : fallback.tag,
         }
       })
     }

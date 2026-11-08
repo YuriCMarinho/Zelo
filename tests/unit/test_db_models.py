@@ -131,14 +131,14 @@ def test_audit_and_cost_records(db_session: Session) -> None:
 def test_run_seed_idempotency(db_session: Session) -> None:
     # Primeira execução do seed
     counts_1 = run_seed(db_session)
-    assert counts_1["properties"] == 3
+    assert counts_1["properties"] == 4
     assert counts_1["providers"] >= 5
     assert counts_1["tickets"] >= 1
     assert counts_1["bookings"] >= 3
 
     # Segunda execução deve manter os dados sem duplicar
     counts_2 = run_seed(db_session)
-    assert counts_2["properties"] == 3
+    assert counts_2["properties"] == 4
     assert counts_2["providers"] == counts_1["providers"]
     assert counts_2["tickets"] == counts_1["tickets"]
 
@@ -162,7 +162,7 @@ def test_api_health_endpoints(client: TestClient, db_session: Session) -> None:
     resp_props = client.get("/api/properties")
     assert resp_props.status_code == 200
     props = resp_props.json()
-    assert len(props) == 3
+    assert len(props) == 4
 
     resp_tickets = client.get("/api/tickets")
     assert resp_tickets.status_code == 200
