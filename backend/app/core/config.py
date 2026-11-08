@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
     llm_mode: str = "mock"
+    llm_model: str | None = None
+    llm_model_router: str = "Qwen/Qwen3.5-4B"
+    llm_model_commercial: str = "Qwen/Qwen3.5-9B"
+    llm_model_validator: str = "Qwen/Qwen3.5-9B"
+    llm_model_resolver: str = "Qwen/Qwen3.5-27B"
     recorded_demo_latency_ms: int = Field(default=80, ge=0, le=1000)
     featherless_api_key: str = "mock-key"
     langfuse_public_key: str = "mock-public"
