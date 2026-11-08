@@ -24,34 +24,39 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 function HeroWaveTexture() {
   return (
     <svg
-      className="hero-waves"
-      viewBox="0 0 700 360"
+      className="hero-waves-bg"
+      viewBox="0 0 1440 405"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="none"
       aria-hidden="true"
     >
+      {/* Linha 1: sobe da base abaixo da casa em curva acentuada para o topo direito */}
       <path
-        d="M 0 240 C 180 180 320 300 500 210 C 580 170 640 190 700 200"
-        stroke="rgba(246, 243, 238, 0.24)"
-        strokeWidth="2"
+        d="M 1060 405 C 1110 320, 1200 210, 1290 130 C 1340 80, 1390 35, 1425 0"
+        stroke="rgba(246, 243, 238, 0.22)"
+        strokeWidth="2.2"
         strokeLinecap="round"
       />
+      {/* Linha 2: onda superior que passa sobre a cumeeira da casa amarela */}
       <path
-        d="M 0 200 C 180 140 320 260 500 170 C 580 130 640 150 700 160"
+        d="M 780 190 C 890 210, 990 170, 1090 130 C 1190 90, 1290 40, 1375 0"
+        stroke="rgba(246, 243, 238, 0.16)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      {/* Linha 3: onda central que cruza o corpo da casa e sobe em direção ao canto direito */}
+      <path
+        d="M 700 270 C 820 295, 940 260, 1060 220 C 1180 175, 1295 105, 1435 25"
+        stroke="rgba(246, 243, 238, 0.20)"
+        strokeWidth="2.0"
+        strokeLinecap="round"
+      />
+      {/* Linha 4: onda inferior que passa sob a casa e sobe com espaçamento harmônico */}
+      <path
+        d="M 580 350 C 700 375, 830 350, 960 330 C 1080 305, 1200 245, 1305 165 C 1365 120, 1410 80, 1440 60"
         stroke="rgba(246, 243, 238, 0.18)"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 0 160 C 180 100 320 220 500 130 C 580 90 640 110 700 120"
-        stroke="rgba(246, 243, 238, 0.13)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 0 120 C 180 60 320 180 500 90 C 580 50 640 70 700 80"
-        stroke="rgba(246, 243, 238, 0.08)"
-        strokeWidth="1.25"
+        strokeWidth="2.0"
         strokeLinecap="round"
       />
     </svg>
@@ -202,6 +207,7 @@ function Listing({ navigate, propertiesList }: { navigate: (url: string) => void
   return (
     <main>
       <section className="hero">
+        <HeroWaveTexture />
         <div className="hero-inner">
           <div>
             <span className="eyebrow light">CUIDADO EM CADA DETALHE</span>
@@ -210,7 +216,6 @@ function Listing({ navigate, propertiesList }: { navigate: (url: string) => void
             <a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a>
           </div>
           <div className="hero-emblem" aria-hidden="true">
-            <HeroWaveTexture />
             <ZeloMark size={180} transparent />
           </div>
         </div>
