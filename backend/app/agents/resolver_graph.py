@@ -19,6 +19,7 @@ import logging
 from collections.abc import Coroutine
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, TypedDict, cast
+from uuid import NAMESPACE_URL, uuid5
 
 from langgraph.checkpoint.base import BaseCheckpointSaver  # type: ignore[import-untyped]
 from langgraph.checkpoint.memory import MemorySaver  # type: ignore[import-untyped]
@@ -40,6 +41,8 @@ from app.agents.resolver_timeouts import (
 from app.core.config import settings
 from app.core.llm import generate
 from app.db.models.audit import AuditEvent
+from app.db.models.booking import Booking
+from app.db.models.chat_message import ChatMessageRecord
 from app.db.models.property import Property
 from app.db.models.provider import Provider
 from app.db.models.quote import Quote
@@ -614,16 +617,42 @@ async def notify_tenant_and_resolve(state: ResolverState) -> dict[str, Any]:
                 node="resolver_notify_tenant",
                 db=db,
             )
+            visit_day = datetime.fromisoformat(state["proposed_date"]).date()
+            occupants = db.scalars(
+                select(Booking).where(
+                    Booking.property_id == state["property_id"],
+                    Booking.status.in_(["confirmed", "active"]),
+                    Booking.start_date <= visit_day,
+                    Booking.end_date >= visit_day,
+                )
+            ).all()
+            for booking in occupants:
+                message_id = str(uuid5(NAMESPACE_URL, f"maintenance:{ticket_id}:{booking.id}"))
+                if db.get(ChatMessageRecord, message_id) is None:
+                    db.add(
+                        ChatMessageRecord(
+                            id=message_id,
+                            property_id=state["property_id"],
+                            session_id=booking.session_id or "default",
+                            channel="guest",
+                            sender="agent",
+                            body=resp.content,
+                            ticket_id=ticket_id,
+                            booking_id=booking.id,
+                        )
+                    )
+            # Mensagem e evidência de entrega são persistidas na mesma transação.
             _audit(
                 db,
                 run_id,
                 ticket_id,
                 "notify_tenant_and_resolve",
-                "tenant_notified",
+                "tenant_notified" if occupants else "tenant_notification_skipped",
                 {
                     "property_id": state["property_id"],
                     "message": mask_pii(resp.content),
                     "scheduled_date": state["proposed_date"],
+                    "recipient_count": len(occupants),
                 },
             )
 
