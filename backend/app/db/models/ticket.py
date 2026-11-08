@@ -32,6 +32,7 @@ class MaintenanceTicket(Base):
     )
     scheduled_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notify_tenant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    adm_synthesis: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)

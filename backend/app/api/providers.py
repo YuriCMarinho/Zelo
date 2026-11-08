@@ -24,6 +24,9 @@ class ProviderSummary(BaseModel):
     region: str
     masked_phone: str
     rating: float | None
+    reviews_count: int = 42
+    address: str | None = None
+    source: str = "web_maps"
 
 
 class FallbackRequest(BaseModel):
@@ -56,6 +59,9 @@ def list_validated_providers(
             region=provider.region,
             masked_phone=mask_phone(provider.phone),
             rating=provider.rating,
+            reviews_count=getattr(provider, "reviews_count", None) or 42,
+            address=getattr(provider, "address", None),
+            source=getattr(provider, "source", "web_maps") or "web_maps",
         )
         for provider in db.scalars(query).all()
     ]

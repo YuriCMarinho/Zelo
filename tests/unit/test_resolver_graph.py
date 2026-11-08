@@ -1149,3 +1149,92 @@ def test_api_audit_events(
     resp_node = client.get("/api/audit?node=router")
     assert resp_node.status_code == 200
     assert len(resp_node.json()) >= 1
+
+
+def test_api_three_providers_llm_quotes_reject_and_auto_approve_flow(
+    client: TestClient,
+    db_session: Session,
+    sample_property: Property,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Valida a descoberta de 3 fornecedores via Web/Maps, geração de propostas por LLM,
+    recusa das propostas pelo anfitrião (nova rodada) e aprovação com confirmação de agenda.
+    """
+    from app.core.config import settings
+    from app.db.models.chat_message import ChatMessageRecord
+
+    monkeypatch.setattr(settings, "provider_source", "web_maps")
+    today = date.today()
+    db_session.add(
+        Booking(
+            id="book-active-llm-flow",
+            property_id=sample_property.id,
+            guest_name="Helena Hóspede",
+            guest_contact="+55 21 98888-1234",
+            start_date=today - timedelta(days=1),
+            end_date=today + timedelta(days=3),
+            status="active",
+        )
+    )
+    t = MaintenanceTicket(
+        id="tick-llm-3prov-001",
+        run_id="run-llm-3prov-001",
+        property_id=sample_property.id,
+        reported_by_role=ReportedByRole.TENANT.value,
+        category=ProviderCategory.ELECTRICIAN.value,
+        urgency=TicketUrgency.URGENT.value,
+        location_in_property="Banheiro da suíte",
+        description="O chuveiro do banheiro da suíte não esquenta e o disjuntor desarma.",
+        status=TicketStatus.OPEN.value,
+    )
+    db_session.add(t)
+    db_session.commit()
+
+    # 1. Dispara a cotação via reject-quotes / auto_quote_with_llm
+    reject_resp = client.post(
+        f"/api/tickets/{t.id}/reject-quotes",
+        json={"reason": "Preciso de orçamento detalhado com garantia de 90 dias."},
+    )
+    assert reject_resp.status_code == 200, reject_resp.text
+    ticket_after_quotes = reject_resp.json()
+    assert ticket_after_quotes["status"] == TicketStatus.AWAITING_ADM_APPROVAL.value
+    assert ticket_after_quotes["adm_synthesis"] is not None
+
+    # 2. Confere os 3 fornecedores reais e suas notas/endereços/propostas
+    quotes_resp = client.get(f"/api/tickets/{t.id}/quotes")
+    assert quotes_resp.status_code == 200
+    quotes = quotes_resp.json()
+    assert len(quotes) == 3
+    assert len({q["provider_id"] for q in quotes}) == 3
+    assert all(q["amount"] is not None and q["amount"] > 0 for q in quotes)
+    assert all(q["provider_rating"] is not None and q["provider_rating"] >= 4.5 for q in quotes)
+    assert all(
+        q["provider_reviews_count"] is not None and q["provider_reviews_count"] >= 40
+        for q in quotes
+    )
+    assert all(q["provider_address"] and "Rio de Janeiro" in q["provider_address"] for q in quotes)
+    assert sum(1 for q in quotes if q["is_recommended"]) == 1
+
+    # 3. Anfitrião aprova o orçamento recomendado com confirmação de agenda via LLM
+    chosen = next(q for q in quotes if q["is_recommended"])
+    approve_resp = client.post(
+        f"/api/tickets/{t.id}/approve",
+        json={"provider_id": chosen["provider_id"], "auto_confirm_date": True},
+    )
+    assert approve_resp.status_code == 200, approve_resp.text
+    resolved_data = approve_resp.json()
+    assert resolved_data["status"] == TicketStatus.RESOLVED.value
+    assert resolved_data["selected_provider_id"] == chosen["provider_id"]
+    assert resolved_data["scheduled_date"] is not None
+    assert resolved_data["notify_tenant"] is True
+
+    # 4. Verifica se o aviso ao hóspede foi gravado no histórico do chat do imóvel
+    chat_msgs = (
+        db_session.query(ChatMessageRecord)
+        .filter(
+            ChatMessageRecord.property_id == sample_property.id,
+            ChatMessageRecord.ticket_id == t.id,
+        )
+        .all()
+    )
+    assert len(chat_msgs) >= 1

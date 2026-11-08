@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 
@@ -59,7 +60,7 @@ class AgentBrowserAdapter:
         self.timeout_seconds = timeout_seconds
         self.executable_path = executable_path
 
-    async def _run(self, session: str, *arguments: str) -> dict:
+    async def _run(self, session: str, *arguments: str) -> dict[str, Any]:
         if not shutil.which(self.command):
             raise BrowserSearchError("Agent Browser não instalado. Rode npm ci em backend/browser.")
         # Ambiente próprio: credenciais da aplicação não são herdadas pelo navegador.
@@ -100,7 +101,8 @@ class AgentBrowserAdapter:
             or response.get("success") is not True
         ):
             raise BrowserSearchError(f"Agent Browser falhou na operação {arguments[0]}.")
-        return response.get("data", {})
+        data = response.get("data")
+        return data if isinstance(data, dict) else {}
 
     async def search(
         self,
@@ -133,7 +135,7 @@ class AgentBrowserAdapter:
 
 
 def parse_cards(
-    cards: list,
+    cards: list[Any],
     category: ProviderCategory,
     region: str,
     limit: int,
@@ -143,8 +145,17 @@ def parse_cards(
     for card in cards:
         if not isinstance(card, dict):
             continue
-        name, url, body = (card.get(key) for key in ("name", "url", "text"))
-        if not all(isinstance(value, str) and value.strip() for value in (name, url, body)):
+        name_raw = card.get("name")
+        url_raw = card.get("url")
+        body_raw = card.get("text")
+        if not (
+            isinstance(name_raw, str) and isinstance(url_raw, str) and isinstance(body_raw, str)
+        ):
+            continue
+        name = name_raw.strip()
+        url = url_raw.strip()
+        body = body_raw.strip()
+        if not (name and url and body):
             continue
         parsed = urlsplit(url)
         if (
@@ -175,7 +186,7 @@ def parse_cards(
         candidates.append(
             ProviderCandidate(
                 place_id=f"maps:{stable_id}",
-                name=name.strip()[:150],
+                name=name[:150],
                 category=category,
                 region=region,
                 phone=phone,

@@ -45,17 +45,14 @@ describe('navegação por imóvel', () => {
     expect(screen.queryByText('Mensagem da Aurora')).not.toBeInTheDocument()
   })
 
-  it('permite escolher um orçamento apenas na demonstração local', async () => {
-    const user = userEvent.setup()
+  it('unifica a aba legada orcamentos diretamente na sessão Agente ⇄ Anfitrião', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(Response.json([]))))
     expect(parseRoute('/imoveis/casa-aurora', '?aba=orcamentos')).toEqual({ view: 'property', propertyId: 'casa-aurora', tab: 'orcamentos' })
+    window.history.replaceState(null, '', '/imoveis/casa-aurora?aba=orcamentos')
     render(<App />)
-    await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
-    await user.click(screen.getByRole('link', { name: 'Orçamentos' }))
-    await user.click(screen.getByRole('radio', { name: /Volt Reparos/ }))
-    expect(screen.getByRole('radio', { name: /Volt Reparos/ })).toHaveAttribute('aria-checked', 'true')
-    await user.click(screen.getByRole('button', { name: /Escolher Volt Reparos/ }))
-    expect(screen.getByText('Escolha simulada')).toBeInTheDocument()
-    expect(screen.getByText(/nenhuma contratação ou agendamento/)).toBeInTheDocument()
+    expect(await screen.findByText(/Somente as decisões deste imóvel/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Orçamentos' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Volt Reparos')).not.toBeInTheDocument()
   })
   it('não inventa chamados ou orçamentos quando o imóvel não tem atendimento', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(Response.json([]))))

@@ -32,6 +32,11 @@ ALLOWED_MODELS = {
     "Qwen/Qwen3.5-27B",
 }
 
+FALLBACK_MODELS: dict[str, str] = {
+    "Qwen/Qwen3.5-4B": "Qwen/Qwen3.5-9B",
+    "Qwen/Qwen3.5-9B": "Qwen/Qwen3.5-27B",
+}
+
 
 class InvalidModelError(ValueError):
     """Lançada quando um modelo não homologado é solicitado."""
@@ -262,8 +267,36 @@ async def generate(
             payload["chat_template_kwargs"] = {"enable_thinking": False}
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(featherless_url, headers=headers, json=payload)
-            response.raise_for_status()
+            try:
+                response = await client.post(featherless_url, headers=headers, json=payload)
+                response.raise_for_status()
+            except (httpx.HTTPStatusError, httpx.RequestError) as http_err:
+                fallback_model = FALLBACK_MODELS.get(model)
+                if fallback_model and (
+                    isinstance(http_err, httpx.RequestError)
+                    or (
+                        isinstance(http_err, httpx.HTTPStatusError)
+                        and http_err.response.status_code in (429, 500, 502, 503, 504)
+                    )
+                ):
+                    logger.warning(
+                        "Falha transitória na API Featherless (%s). Tentando fallback para %s.",
+                        http_err,
+                        fallback_model,
+                        extra={
+                            "run_id": run_id,
+                            "node": node,
+                            "original_model": model,
+                            "fallback": fallback_model,
+                        },
+                    )
+                    payload["model"] = fallback_model
+                    response = await client.post(featherless_url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    model = fallback_model
+                else:
+                    raise
+
             data = response.json()
 
         content = data["choices"][0]["message"]["content"]
@@ -284,7 +317,40 @@ async def generate(
                     cleaned = cleaned[3:]
                 if cleaned.endswith("```"):
                     cleaned = cleaned[:-3]
-                parsed = response_format.model_validate(json.loads(cleaned.strip()))
+                try:
+                    parsed = response_format.model_validate(json.loads(cleaned.strip()))
+                except Exception:
+                    fallback_model = FALLBACK_MODELS.get(model)
+                    if fallback_model:
+                        logger.warning(
+                            "Falha ao validar schema Pydantic com %s. Tentando fallback para %s.",
+                            model,
+                            fallback_model,
+                            extra={"run_id": run_id, "node": node},
+                        )
+                        payload["model"] = fallback_model
+                        async with httpx.AsyncClient(timeout=60.0) as fb_client:
+                            fb_resp = await fb_client.post(
+                                featherless_url, headers=headers, json=payload
+                            )
+                            fb_resp.raise_for_status()
+                            fb_data = fb_resp.json()
+                        content = fb_data["choices"][0]["message"]["content"]
+                        model = fallback_model
+                        fb_usage = fb_data.get("usage", {})
+                        input_tokens = fb_usage.get("prompt_tokens", estimated_input_tokens)
+                        output_tokens = fb_usage.get("completion_tokens", len(content) // 4)
+                        cost_usd = calculate_call_cost(model, input_tokens, output_tokens)
+                        cleaned_fb = content.strip()
+                        if cleaned_fb.startswith("```json"):
+                            cleaned_fb = cleaned_fb[7:]
+                        if cleaned_fb.startswith("```"):
+                            cleaned_fb = cleaned_fb[3:]
+                        if cleaned_fb.endswith("```"):
+                            cleaned_fb = cleaned_fb[:-3]
+                        parsed = response_format.model_validate(json.loads(cleaned_fb.strip()))
+                    else:
+                        raise
         else:
             parsed = None
 

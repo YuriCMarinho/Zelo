@@ -102,6 +102,8 @@ export interface Quote {
   provider_id: string
   provider_name?: string | null
   provider_rating?: number | null
+  provider_reviews_count?: number | null
+  provider_address?: string | null
   amount: number | null
   description?: string | null
   proposed_availability?: string | null

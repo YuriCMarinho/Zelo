@@ -31,7 +31,7 @@ def check() -> dict[str, object]:
     ) as directory:
         env = {
             **os.environ, "LLM_MODE": "recorded_demo", "ENVIRONMENT": "development",
-            "DATABASE_URL": f"sqlite:///{directory}/demo.db", "PROVIDER_SOURCE": "fixture",
+            "DATABASE_URL": f"sqlite:///{directory}/demo.db", "PROVIDER_SOURCE": "web_maps",
             "FEATHERLESS_API_KEY": "", "GOOGLE_PLACES_API_KEY": "",
             "LANGFUSE_PUBLIC_KEY": "mock-public", "LANGFUSE_SECRET_KEY": "mock-secret",
             "MAX_COST_GLOBAL_USD": "0", "RECORDED_DEMO_LATENCY_MS": "80",

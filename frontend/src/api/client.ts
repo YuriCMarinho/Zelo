@@ -142,6 +142,17 @@ export function approveQuote(
   }, 'Falha ao aprovar orçamento')
 }
 
+export function rejectTicketQuotes(
+  ticketId: string,
+  reason?: string,
+  runId?: string,
+): Promise<MaintenanceTicket> {
+  return postTicket(`${API_BASE}/tickets/${encodeURIComponent(ticketId)}/reject-quotes`, {
+    reason: reason || 'Solicitação de novos orçamentos pelo anfitrião.',
+    run_id: runId || `run-reject-quotes-${Date.now()}`,
+  }, 'Falha ao solicitar novos orçamentos')
+}
+
 export function startTicketResolution(ticketId: string): Promise<MaintenanceTicket> {
   return postTicket(`${API_BASE}/tickets/${encodeURIComponent(ticketId)}/start-resolution`, undefined, 'Falha ao iniciar resolução')
 }

@@ -13,7 +13,7 @@ from app.core.llm import generate
 from app.db.models import CostRecord
 from app.demo.replay import RecordedDemoError, recordings
 from app.observability.langfuse_client import langfuse_client
-from app.services.provider_collector import FixturePlacesAdapter, make_collector
+from app.services.provider_collector import WebMapsPlacesAdapter, make_collector
 
 
 @pytest.fixture
@@ -145,7 +145,7 @@ def test_contingency_forces_local_provider_source(
 ) -> None:
     monkeypatch.setattr(settings, "llm_mode", mode)
     monkeypatch.setattr(settings, "provider_source", "google_places")
-    assert isinstance(make_collector().source, FixturePlacesAdapter)
+    assert isinstance(make_collector().source, WebMapsPlacesAdapter)
 
 
 def test_missing_recordings_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:

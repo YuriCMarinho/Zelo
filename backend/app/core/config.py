@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     llm_model_router: str = "Qwen/Qwen3.5-4B"
     llm_model_commercial: str = "Qwen/Qwen3.5-9B"
-    llm_model_validator: str = "Qwen/Qwen3.5-9B"
-    llm_model_resolver: str = "Qwen/Qwen3.5-27B"
+    llm_model_validator: str = "Qwen/Qwen3.5-4B"
+    llm_model_resolver: str = "Qwen/Qwen3.5-9B"
+    llm_model_resolver_notify: str = "Qwen/Qwen3.5-4B"
+    llm_model_fallback: str = "Qwen/Qwen3.5-27B"
     recorded_demo_latency_ms: int = Field(default=80, ge=0, le=1000)
     featherless_api_key: str = "mock-key"
     langfuse_public_key: str = "mock-public"
@@ -21,7 +23,7 @@ class Settings(BaseSettings):
     max_cost_per_run_usd: float = 0.03
     max_cost_global_usd: float = 25.00
     google_places_api_key: str = ""
-    provider_source: str = "agent_browser"
+    provider_source: str = "web_maps"
     agent_browser_command: str = ""
     agent_browser_executable_path: str = ""
     browser_timeout_seconds: int = Field(default=35, ge=5, le=60)

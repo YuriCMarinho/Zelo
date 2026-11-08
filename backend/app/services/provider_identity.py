@@ -1,6 +1,7 @@
 import hashlib
 import re
 import unicodedata
+from typing import Any
 
 
 def normalized_phone(phone: str) -> str:
@@ -15,6 +16,6 @@ def provider_identity(category: str, region: str, phone: str) -> str:
     return hashlib.sha256(identity.encode()).hexdigest()
 
 
-def identity_default(context) -> str:
+def identity_default(context: Any) -> str:
     values = context.get_current_parameters()
     return provider_identity(values["category"], values["region"], values["phone"])

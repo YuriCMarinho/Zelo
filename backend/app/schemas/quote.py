@@ -38,3 +38,6 @@ class QuoteRead(QuoteBase):
     created_at: datetime
     provider_name: str | None = None
     provider_rating: float | None = None
+    provider_reviews_count: int | None = None
+    provider_address: str | None = None
+    is_recommended: bool = False

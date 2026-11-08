@@ -7,6 +7,7 @@ import {
   fetchTicketsForProperty,
   getSessionId,
   rejectBooking,
+  rejectTicketQuotes,
 } from '../api/client'
 import {
   formatFriendlyDate,
@@ -21,6 +22,7 @@ import { propertyUrl } from '../routes'
 import { ChatPanel } from './ChatPanel'
 import { QuotesComparison } from './QuotesComparison'
 import { ProviderSimulator } from './ProviderSimulator'
+import { StateTimeline } from './StateTimeline'
 
 const moneyBrl = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -130,6 +132,13 @@ export function PropertyWorkspace({
   async function handleApprove(providerId: string) {
     if (!ticket) return
     const updated = await approveQuote(ticket.id, providerId, ticket.run_id)
+    setSnapshot((previous) => ({ ...previous, ticket: updated }))
+    loadTicketData()
+  }
+
+  async function handleRejectQuotes(reason: string) {
+    if (!ticket) return
+    const updated = await rejectTicketQuotes(ticket.id, reason, ticket.run_id)
     setSnapshot((previous) => ({ ...previous, ticket: updated }))
     loadTicketData()
   }
@@ -594,10 +603,18 @@ export function PropertyWorkspace({
               ticket={ticket}
               quotes={quotes}
               onApprove={handleApprove}
+              onRejectQuotes={handleRejectQuotes}
               isLoading={loadingQuotes}
             />
           </div>
           <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {ticket && (
+              <StateTimeline
+                status={ticket.status}
+                scheduledDate={scheduledDate ? formatFriendlyDate(scheduledDate) : null}
+                notifyTenant={ticket.notify_tenant}
+              />
+            )}
             {ticket && (
               <details className="adm-control-card">
                 <summary>Ações do prestador (demonstração)</summary>
