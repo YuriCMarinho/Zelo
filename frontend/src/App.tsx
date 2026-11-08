@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { ChatMessage, ChatRole, Occupancy, Property, PropertyTab } from './contracts'
-import { demoBudget, initialMessages, properties } from './demo-data'
+import { initialMessages, properties } from './demo-data'
+import { ManagementPage } from './management'
+import { withLocalReservations } from './reservations'
 import { parseRoute, propertyUrl, type Route } from './routes'
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value)
-const usd = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD' }).format(value)
 const currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'visao-geral', label: 'Visão geral' },
@@ -13,28 +14,18 @@ const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'orcamentos', label: 'Orçamentos' },
 ]
 
-function ZeloMark({ size = 40 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 72 72" role="img" aria-label="Zelo"><rect width="72" height="72" rx="20" fill="currentColor" /><path d="M18 36 36 21 54 36M25 33v18h22V33" fill="none" stroke="#F6F3EE" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" /><circle cx="36" cy="41.5" r="4.5" fill="#F2A541" /></svg>
+function ZeloMark({ size = 40, transparent = false }: { size?: number; transparent?: boolean }) {
+  return <img className="zelo-logo" src={transparent ? '/zelo-logo-transparent.svg' : '/zelo-logo.svg'} width={size} height={size} alt="Zelo" />
 }
 
-function BudgetMonitor() {
-  const percent = Math.min(100, (demoBudget.spentUsd / demoBudget.totalUsd) * 100)
-  return <div className="budget-monitor" aria-label={`Orçamento de demonstração: ${usd(demoBudget.spentUsd)} de ${usd(demoBudget.totalUsd)} utilizados`}>
-    <div className="budget-icon" aria-hidden="true">◔</div>
-    <div className="budget-copy"><strong>Orçamento IA</strong><span>{usd(demoBudget.spentUsd)} / {usd(demoBudget.totalUsd)}</span></div>
-    <div className="budget-meter" role="progressbar" aria-valuenow={demoBudget.spentUsd} aria-valuemin={0} aria-valuemax={demoBudget.totalUsd} aria-label="Consumo do orçamento"><span style={{ width: `${percent}%` }} /></div>
-    <span className="budget-status">Demo</span>
-  </div>
-}
-
-function Header({ navigate }: { navigate: (url: string) => void }) {
+function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   return <header className="site-header">
     <div className="header-inner">
       <a href="/" className="brand" onClick={(event) => { event.preventDefault(); navigate('/') }} aria-label="Zelo, ir para imóveis">
         <ZeloMark /><span>zelo<small>QUEBROU? A GENTE RESOLVE.</small></span>
       </a>
-      <nav className="header-nav" aria-label="Navegação principal"><a href="/" onClick={(event) => { event.preventDefault(); navigate('/') }}>Meus imóveis</a><span className="nav-divider" /><span className="nav-label">Painel do anfitrião</span></nav>
-      <div className="header-right"><BudgetMonitor /><div className="avatar" aria-label="Perfil do anfitrião">A</div></div>
+      <nav className="header-nav" aria-label="Navegação principal">{[{ url: '/', label: 'Meus imóveis', view: 'listing' }, { url: '/reservas', label: 'Reservas', view: 'reservas' }, { url: '/manutencao', label: 'Manutenção', view: 'manutencao' }, { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' }].map((item) => <a key={item.url} href={item.url} aria-current={route.view === item.view || (route.view === 'property' && item.view === 'listing') ? 'page' : undefined} onClick={(event) => { event.preventDefault(); navigate(item.url) }}>{item.label}</a>)}</nav>
+      <div className="header-right"><div className="avatar" aria-label="Perfil do anfitrião">A</div></div>
     </div>
   </header>
 }
@@ -53,7 +44,7 @@ function Listing({ navigate }: { navigate: (url: string) => void }) {
   const [query, setQuery] = useState('')
   const filtered = properties.filter((property) => `${property.title} ${property.location}`.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')))
   return <main>
-    <section className="hero"><div className="hero-inner"><div><span className="eyebrow light">CUIDADO EM CADA DETALHE</span><h1>Seu imóvel bem cuidado.<br />Você no controle.</h1><p>Conversas, manutenção e decisões reunidas em um só lugar. A gente resolve; você aprova.</p><a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a></div><div className="hero-emblem" aria-hidden="true"><ZeloMark size={180} /></div></div></section>
+    <section className="hero"><div className="hero-inner"><div><span className="eyebrow light">CUIDADO EM CADA DETALHE</span><h1>Seu imóvel bem cuidado.<br />Você no controle.</h1><p>Conversas, manutenção e decisões reunidas em um só lugar. A gente resolve; você aprova.</p><a href="#imoveis" className="hero-button">Ver meus imóveis <span aria-hidden="true">↗</span></a></div><div className="hero-emblem" aria-hidden="true"><ZeloMark size={180} transparent /></div></div></section>
     <section id="imoveis" className="listing-section page-width"><div className="section-heading"><div><span className="eyebrow">SEUS ESPAÇOS</span><h2>Meus imóveis</h2><p>Acompanhe cada estadia com tranquilidade.</p></div><label className="search-box"><span aria-hidden="true">⌕</span><span className="sr-only">Buscar imóvel</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar imóvel ou local" /></label></div>
       {filtered.length ? <div className="property-grid">{filtered.map((property) => <PropertyCard key={property.id} property={property} navigate={navigate} />)}</div> : <div className="empty-state">Nenhum imóvel encontrado para “{query}”.</div>}
       <div className="care-banner"><div className="care-symbol"><ZeloMark size={32} /></div><div><strong>Cuidar bem é estar por perto.</strong><p>Conversas, agenda e manutenção conectadas a cada imóvel.</p></div></div>
@@ -129,5 +120,5 @@ export default function App() {
   useEffect(() => { const onPopState = () => setRoute(parseRoute(window.location.pathname, window.location.search)); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState) }, [])
   const property = useMemo(() => route.view === 'property' ? properties.find((item) => item.id === route.propertyId) : undefined, [route])
   function navigate(url: string) { window.history.pushState(null, '', url); setRoute(parseRoute(window.location.pathname, window.location.search)); window.scrollTo?.(0, 0) }
-  return <div className="app-shell"><Header navigate={navigate} />{route.view === 'property' && property ? <PropertyPage property={property} tab={route.tab} navigate={navigate} messages={messages} sendMessage={(message) => setMessages((previous) => [...previous, message])} /> : <Listing navigate={navigate} />}<footer className="site-footer"><div className="page-width"><span>zelo</span><span>Quebrou algo no imóvel? A gente resolve. Você só aprova.</span><span>© {new Date().getFullYear()} Zelo</span></div></footer></div>
+  return <div className="app-shell"><Header navigate={navigate} route={route} />{route.view === 'property' && property ? <PropertyPage property={withLocalReservations(property)} tab={route.tab} navigate={navigate} messages={messages} sendMessage={(message) => setMessages((previous) => [...previous, message])} /> : route.view === 'reservas' || route.view === 'manutencao' || route.view === 'configuracoes' ? <ManagementPage key={route.view} view={route.view} navigate={navigate} /> : <Listing navigate={navigate} />}<footer className="site-footer"><div className="page-width"><ZeloMark size={32} /><span>Quebrou algo no imóvel? A gente resolve. Você só aprova.</span><span>© {new Date().getFullYear()} Zelo</span></div></footer></div>
 }

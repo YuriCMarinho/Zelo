@@ -1,9 +1,14 @@
+import type { ManagementView } from './management'
 import type { PropertyTab } from './contracts'
 import { properties } from './demo-data'
 
-export type Route = { view: 'listing' } | { view: 'property'; propertyId: string; tab: PropertyTab }
+export type Route = { view: 'listing' } | { view: ManagementView } | { view: 'property'; propertyId: string; tab: PropertyTab }
 
 export function parseRoute(pathname: string, search: string): Route {
+  const page = pathname.replace(/\/$/, '')
+  if (page === '/reservas') return { view: 'reservas' }
+  if (page === '/manutencao') return { view: 'manutencao' }
+  if (page === '/configuracoes') return { view: 'configuracoes' }
   const match = /^\/imoveis\/([^/]+)\/?$/.exec(pathname)
   if (!match?.[1] || !properties.some((property) => property.id === match[1])) return { view: 'listing' }
   const requested = new URLSearchParams(search).get('aba')
