@@ -168,14 +168,28 @@ def approve_booking(
     db: DatabaseDep,
     payload: BookingApproveRequest | None = None,
 ) -> BookingRead:
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = db.query(Booking).filter(Booking.id == booking_id).with_for_update().first()
     if booking is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Reserva '{booking_id}' não encontrada.",
         )
 
-    prop = db.query(Property).filter(Property.id == booking.property_id).first()
+    if booking.status in ("confirmed", "active"):
+        if (
+            payload
+            and payload.final_price is not None
+            and payload.final_price != booking.total_price
+        ):
+            raise HTTPException(status_code=409, detail="Reserva já aprovada com outro valor.")
+        return BookingRead.model_validate(booking)
+    if booking.status != "pending_approval":
+        raise HTTPException(
+            status_code=409, detail="Somente solicitações pendentes podem ser aprovadas."
+        )
+
+    # Serializa aprovações do mesmo imóvel, inclusive para reservas diferentes.
+    prop = db.query(Property).filter(Property.id == booking.property_id).with_for_update().first()
     prop_name = prop.name if prop else booking.property_id
 
     # Verifica se outra reserva confirmada ocupou as datas enquanto estava pendente
@@ -268,11 +282,18 @@ def reject_booking(
     payload: BookingRejectRequest,
     db: DatabaseDep,
 ) -> BookingRead:
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = db.query(Booking).filter(Booking.id == booking_id).with_for_update().first()
     if booking is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Reserva '{booking_id}' não encontrada.",
+        )
+
+    if booking.status == "rejected":
+        return BookingRead.model_validate(booking)
+    if booking.status != "pending_approval":
+        raise HTTPException(
+            status_code=409, detail="Somente solicitações pendentes podem ser recusadas."
         )
 
     run_id = _resolve_booking_run_id(booking, "run-book-reject")
