@@ -108,4 +108,15 @@ describe('navegação por imóvel', () => {
     expect(screen.getByText('Simulador de Cenários dos Agentes')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Relato de Manutenção/ })).toBeInTheDocument()
   })
+
+  it('abre e fecha o modal de reset de demonstração para avaliadores', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const resetBtn = screen.getByRole('button', { name: /Resetar Demo/ })
+    expect(resetBtn).toBeInTheDocument()
+    await user.click(resetBtn)
+    expect(screen.getByText('Resetar Dados da Demonstração?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByText('Resetar Dados da Demonstração?')).not.toBeInTheDocument()
+  })
 })

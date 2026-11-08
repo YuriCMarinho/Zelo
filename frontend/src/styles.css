@@ -1233,3 +1233,63 @@ button,a,input{transition:background-color .18s ease,border-color .18s ease,box-
 @media(max-width:700px){.site-header{height:auto}.header-inner{flex-wrap:wrap;padding:14px 0;gap:12px}.header-right{margin-left:auto}.header-nav{display:flex;order:3;width:100%;margin:0;overflow-x:auto;gap:22px;padding:8px 0 12px;font-size:12px}.header-nav a{white-space:nowrap}.management-page{padding-top:32px}.management-toolbar{align-items:stretch;flex-direction:column}.management-filters{display:grid;grid-template-columns:1fr 1fr;gap:12px}.management-card{padding:20px}.management-stats{gap:8px}.management-stats .management-card{padding:14px 10px}.management-stats span{font-size:11px}.management-stats strong{font-size:26px}.ticket-grid,.form-grid{grid-template-columns:1fr}.form-full{grid-column:auto}.reservation-row{gap:14px}.reservation-row img{width:68px;height:76px}.reservation-row>div{flex-basis:calc(100% - 90px)}.reservation-row .action-secondary{margin-left:auto}.reservation-row h2{font-size:17px}}
 
 .zelo-logo{display:block;object-fit:contain;flex-shrink:0}
+
+/* Botão e modal de Reset de Demonstração (1-Click Reset) */
+.demo-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fdf6ec;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.demo-reset-btn:hover {
+  background: #fef3c7;
+  color: #92400e;
+  transform: translateY(-1px);
+}
+.demo-reset-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+.demo-reset-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  border: 1px solid #e2e8f0;
+}
+.demo-reset-modal h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: #17323a;
+}
+.demo-reset-modal p {
+  font-size: 14px;
+  color: #64777b;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+.demo-reset-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
