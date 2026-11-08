@@ -120,6 +120,9 @@ export function PropertyWorkspace({
     if (!ticket) return
     const updated = await approveQuote(ticket.id, providerId)
     setTicket(updated)
+    // Após a aprovação o Nó 3 ainda espera a devolutiva do prestador; o hóspede só é
+    // avisado quando o dia estiver confirmado.
+    if (updated.status !== 'resolved' && updated.status !== 'confirmed_schedule') return
     const dateStr = updated.scheduled_date || 'amanhã, 9h'
     setScheduledDate(dateStr)
 
@@ -151,6 +154,7 @@ export function PropertyWorkspace({
               <ProviderSimulator
                 property={property}
                 currentTicketId={ticket?.id}
+                ticketStatus={ticket?.status}
                 onTicketUpdated={loadTicketData}
               />
               <StateTimeline
@@ -187,6 +191,7 @@ export function PropertyWorkspace({
               <ProviderSimulator
                 property={property}
                 currentTicketId={ticket?.id}
+                ticketStatus={ticket?.status}
                 onTicketUpdated={loadTicketData}
               />
             </aside>

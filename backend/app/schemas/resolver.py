@@ -6,6 +6,8 @@ Assim as duas tasks rodam em paralelo e se integram sem tocar nos arquivos uma d
 
 from typing import Protocol, runtime_checkable
 
+from pydantic import Field
+
 from app.schemas.common import BaseSchema, NonBlankStr
 
 
@@ -24,3 +26,18 @@ class ResolverStarter(Protocol):
     """Porta de entrada do Nó 3. Deve ser idempotente por ticket_id."""
 
     def start_resolution(self, request: ResolutionRequest) -> None: ...
+
+
+class ProviderQuoteReply(BaseSchema):
+    """Resposta de um prestador a um pedido de orçamento (canal simulado/allowlist)."""
+
+    amount: float = Field(..., ge=0, le=1_000_000)
+    description: str | None = Field(None, max_length=500)
+    proposed_availability: str | None = Field(None, max_length=200)
+
+
+class ProviderDateReply(BaseSchema):
+    """Devolutiva do dia: o prestador escolhido aceita ou recusa a data proposta."""
+
+    accepted: bool
+    message: str | None = Field(None, max_length=500)

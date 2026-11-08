@@ -140,6 +140,41 @@ export async function startTicketResolution(ticketId: string): Promise<Maintenan
   }
 }
 
+async function postProviderReply(url: string, body: unknown): Promise<MaintenanceTicket> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null)
+    throw new Error(detail?.detail ?? `Status ${res.status}`)
+  }
+  return await res.json()
+}
+
+/** Prestador (canal simulado/allowlist) envia o orçamento pedido pelo Nó 3. */
+export function submitQuoteResponse(
+  ticketId: string,
+  providerId: string,
+  reply: { amount: number; description?: string; proposedAvailability?: string },
+): Promise<MaintenanceTicket> {
+  return postProviderReply(`${API_BASE}/tickets/${ticketId}/quotes/${providerId}/response`, {
+    amount: reply.amount,
+    description: reply.description,
+    proposed_availability: reply.proposedAvailability,
+  })
+}
+
+/** Prestador escolhido aceita ou recusa a data proposta (devolutiva do dia). */
+export function submitDateResponse(
+  ticketId: string,
+  accepted: boolean,
+  message?: string,
+): Promise<MaintenanceTicket> {
+  return postProviderReply(`${API_BASE}/tickets/${ticketId}/date-response`, { accepted, message })
+}
+
 export interface ChatApiResult {
   runId: string
   propertyId: string

@@ -1,16 +1,31 @@
 import { useState } from 'react'
-import { sendChatMessage, startTicketResolution } from '../api/client'
+import {
+  fetchQuotes,
+  sendChatMessage,
+  startTicketResolution,
+  submitDateResponse,
+  submitQuoteResponse,
+} from '../api/client'
 import type { Property } from '../contracts'
 
 interface ProviderSimulatorProps {
   property: Property
   currentTicketId?: string | null
+  ticketStatus?: string | null
   onTicketUpdated: () => void
 }
+
+// Respostas de exemplo dos prestadores (canal simulado; nada sai para terceiros).
+const SAMPLE_QUOTES = [
+  { amount: 180, description: 'Troca do componente com garantia de 90 dias', proposedAvailability: 'Amanhã cedo' },
+  { amount: 240, description: 'Reparo completo e teste de vazamento', proposedAvailability: 'Hoje à tarde' },
+  { amount: 150, description: 'Reparo simples, peça à parte', proposedAvailability: 'Sexta-feira' },
+]
 
 export function ProviderSimulator({
   property,
   currentTicketId,
+  ticketStatus,
   onTicketUpdated,
 }: ProviderSimulatorProps) {
   const [running, setRunning] = useState(false)
@@ -71,6 +86,44 @@ export function ProviderSimulator({
     }
   }
 
+  async function runProviderAction(action: () => Promise<string>) {
+    setRunning(true)
+    setFeedback(null)
+    try {
+      setFeedback(await action())
+      onTicketUpdated()
+    } catch (err: unknown) {
+      setFeedback(`Erro do prestador: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  function handleProvidersSendQuotes() {
+    if (!currentTicketId) return
+    void runProviderAction(async () => {
+      const pending = (await fetchQuotes(currentTicketId)).filter((q) => q.status === 'requested')
+      for (const [index, quote] of pending.entries()) {
+        await submitQuoteResponse(currentTicketId, quote.provider_id, SAMPLE_QUOTES[index % SAMPLE_QUOTES.length]!)
+      }
+      return `${pending.length} prestador(es) enviaram orçamento. O anfitrião já pode decidir.`
+    })
+  }
+
+  function handleDateReply(accepted: boolean) {
+    if (!currentTicketId) return
+    void runProviderAction(async () => {
+      await submitDateResponse(
+        currentTicketId,
+        accepted,
+        accepted ? 'Confirmo a data proposta.' : 'Não consigo nesta data.',
+      )
+      return accepted
+        ? 'Prestador confirmou o dia. Chamado concluído e hóspede avisado se estiver no imóvel.'
+        : 'Prestador recusou. O agente vai propor a próxima janela da agenda.'
+    })
+  }
+
   return (
     <div className="simulator-box" aria-label="Simulador de cenários do avaliador">
       <div>
@@ -89,7 +142,7 @@ export function ProviderSimulator({
           onClick={handleSimulateMaintenance}
         >
           <strong>Relato de Manutenção</strong>
-          <span>Abre ticket de chuveiro e coleta 3 orçamentos (Nó 2 → Nó 3).</span>
+          <span>Abre ticket de chuveiro e pede orçamentos aos prestadores (Nó 2 → Nó 3).</span>
         </button>
 
         <button
@@ -102,15 +155,50 @@ export function ProviderSimulator({
           <span>Roteador direciona ao Nó 1 (Comercial) sem gerar ticket.</span>
         </button>
 
-        {currentTicketId && (
+        {currentTicketId && ticketStatus === 'waiting_quotes' && (
+          <button
+            type="button"
+            className="scenario-btn"
+            disabled={running}
+            onClick={handleProvidersSendQuotes}
+          >
+            <strong>Prestadores respondem</strong>
+            <span>Cada prestador consultado envia seu orçamento (Passo 1).</span>
+          </button>
+        )}
+
+        {currentTicketId && ticketStatus === 'waiting_date_confirmation' && (
+          <>
+            <button
+              type="button"
+              className="scenario-btn"
+              disabled={running}
+              onClick={() => handleDateReply(true)}
+            >
+              <strong>Prestador aceita a data</strong>
+              <span>Devolutiva do dia positiva (Passo 4).</span>
+            </button>
+            <button
+              type="button"
+              className="scenario-btn"
+              disabled={running}
+              onClick={() => handleDateReply(false)}
+            >
+              <strong>Prestador recusa a data</strong>
+              <span>Volta ao Passo 3 com a próxima janela.</span>
+            </button>
+          </>
+        )}
+
+        {currentTicketId && (ticketStatus === 'open' || ticketStatus === 'no_providers_fallback') && (
           <button
             type="button"
             className="scenario-btn"
             disabled={running}
             onClick={handleTriggerResolution}
           >
-            <strong>Re-executar Resolução</strong>
-            <span>Re-dispara o Nó 3 no chamado #{currentTicketId.slice(0, 8)}.</span>
+            <strong>{ticketStatus === 'no_providers_fallback' ? 'Buscar prestadores de novo' : 'Iniciar Resolução'}</strong>
+            <span>Dispara o Nó 3 no chamado #{currentTicketId.slice(0, 8)}.</span>
           </button>
         )}
       </div>
