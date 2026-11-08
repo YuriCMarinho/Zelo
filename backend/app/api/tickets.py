@@ -119,7 +119,6 @@ async def start_ticket_resolution(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=ticket.property_id,
         run_id=ticket.run_id,
     )
     await starter.astart_resolution(req, db=db)

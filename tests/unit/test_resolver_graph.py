@@ -388,7 +388,6 @@ async def test_langgraph_happy_path_with_tenant_notification(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
 
@@ -441,7 +440,6 @@ async def test_langgraph_happy_path_interrupt_and_resume(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
 
@@ -515,7 +513,6 @@ async def test_langgraph_alternative_path_no_providers(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
 
@@ -576,7 +573,6 @@ async def test_langgraph_alternative_path_refusal_loop(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
 
@@ -637,7 +633,6 @@ async def test_langgraph_alternative_path_max_refusals_escalates(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
 
@@ -678,7 +673,6 @@ async def test_langgraph_starter_idempotency(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
 
@@ -709,7 +703,6 @@ def test_langgraph_sync_starter_call(
     starter = LangGraphResolverStarter(compiled_resolver_graph)
     req = ResolutionRequest(
         ticket_id=ticket.id,
-        property_id=sample_property.id,
         run_id=ticket.run_id,
     )
     # Não deve levantar exceções
@@ -879,7 +872,7 @@ async def test_api_approve_ticket_endpoint_validation_and_success(
 
     # 3. Executa o starter para levar o ticket até o ponto de pausa (AWAITING_ADM_APPROVAL)
     starter = LangGraphResolverStarter(compiled_resolver_graph)
-    req = ResolutionRequest(ticket_id=t.id, property_id=sample_property.id, run_id=t.run_id)
+    req = ResolutionRequest(ticket_id=t.id, run_id=t.run_id)
     await starter.astart_resolution(req, db=db_session)
     db_session.expire_all()
 
