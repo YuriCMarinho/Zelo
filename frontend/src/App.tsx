@@ -254,10 +254,12 @@ export default function App() {
         <Listing navigate={navigate} propertiesList={propertiesList} />
       )}
       <footer className="site-footer">
-        <div className="page-width">
-          <ZeloMark size={32} />
-          <span>Quebrou algo no imóvel? A gente resolve. Você só aprova.</span>
-          <span>© {new Date().getFullYear()} Zelo</span>
+        <div className="page-width footer-inner">
+          <div className="footer-brand">
+            <ZeloMark size={24} />
+            <span className="footer-tagline">Quebrou algo no imóvel? A gente resolve. Você só aprova.</span>
+          </div>
+          <span className="footer-copy">© {new Date().getFullYear()} Zelo</span>
         </div>
       </footer>
     </div>
