@@ -1298,15 +1298,15 @@ button,a,input{transition:background-color .18s ease,border-color .18s ease,box-
   margin-top: auto;
   border-top: 1px solid var(--mar-08, rgba(23, 50, 58, 0.08)) !important;
   background: var(--branco, #ffffff);
-  padding: 10px 0 !important;
-  font-size: 12px;
+  padding: 22px 0 !important;
+  font-size: 13px;
   color: var(--mar-72, #64777b);
 }
 
 .site-footer > div,
 .site-footer .footer-inner {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 16px;
   padding: 0 !important;
@@ -1315,7 +1315,7 @@ button,a,input{transition:background-color .18s ease,border-color .18s ease,box-
 .footer-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-start;
 }
 
 .footer-brand .zelo-logo {
@@ -1325,32 +1325,42 @@ button,a,input{transition:background-color .18s ease,border-color .18s ease,box-
 .footer-tagline,
 .site-footer .footer-tagline {
   font-family: Inter, system-ui, sans-serif;
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 500;
   color: var(--mar-profundo, #17323a);
   letter-spacing: normal !important;
+  text-align: center;
 }
 
 .footer-copy {
   font-family: Inter, system-ui, sans-serif;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--mar-72, #64777b);
   white-space: nowrap;
+  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .detail-page {
   padding-bottom: 24px !important;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 768px) {
   .site-footer {
-    padding: 12px 0 !important;
+    padding: 16px 0 !important;
   }
   .site-footer > div,
   .site-footer .footer-inner {
+    display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    text-align: center;
+  }
+  .footer-brand,
+  .footer-copy {
+    justify-content: center;
     text-align: center;
   }
 }

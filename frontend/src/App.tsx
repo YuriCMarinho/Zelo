@@ -256,9 +256,9 @@ export default function App() {
       <footer className="site-footer">
         <div className="page-width footer-inner">
           <div className="footer-brand">
-            <ZeloMark size={24} />
-            <span className="footer-tagline">Quebrou algo no imóvel? A gente resolve. Você só aprova.</span>
+            <ZeloMark size={28} />
           </div>
+          <span className="footer-tagline">Quebrou algo no imóvel? A gente resolve. Você só aprova.</span>
           <span className="footer-copy">© {new Date().getFullYear()} Zelo</span>
         </div>
       </footer>
