@@ -24,17 +24,25 @@ describe('AgentGraphView Component', () => {
     expect(screen.getAllByText(/3.2 Decisão ADM/).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('permite alternar os filtros de imóveis', async () => {
+  it('permite alternar os filtros de cidade e imóvel através do dropbox', async () => {
     const user = userEvent.setup()
     render(<AgentGraphView navigate={() => {}} propertiesList={[...properties]} />)
 
-    const auroraBtn = screen.getByRole('button', { name: 'Casa Aurora' })
-    await user.click(auroraBtn)
-    expect(auroraBtn).toHaveClass('active')
+    const select = screen.getByRole('combobox', { name: 'Filtrar por Cidade ou Imóvel' }) as HTMLSelectElement
+    expect(select).toBeInTheDocument()
+    expect(select.value).toBe('all')
 
-    const allBtn = screen.getByRole('button', { name: 'Todos os Imóveis' })
-    await user.click(allBtn)
-    expect(allBtn).toHaveClass('active')
+    // Filtra por cidade
+    await user.selectOptions(select, 'city:Fortaleza')
+    expect(select.value).toBe('city:Fortaleza')
+
+    // Filtra por imóvel específico
+    await user.selectOptions(select, 'casa-aurora')
+    expect(select.value).toBe('casa-aurora')
+
+    // Retorna para todos
+    await user.selectOptions(select, 'all')
+    expect(select.value).toBe('all')
   })
 
   it('abre detalhes e telemetria Langfuse ao clicar em uma bolinha do grafo', async () => {
@@ -50,7 +58,7 @@ describe('AgentGraphView Component', () => {
     expect(screen.getByText('run-demo-001')).toBeInTheDocument()
   })
 
-  it('renderiza o filtro de casas dentro do card e não exibe elementos ruidosos removidos', () => {
+  it('renderiza o dropbox de cidades e imóveis dentro da div do grafo e não exibe elementos ruidosos', () => {
     render(<AgentGraphView navigate={() => {}} propertiesList={[...properties]} />)
 
     // O botão de guia explicativo e a dica solta foram removidos por feedback de design
@@ -58,9 +66,12 @@ describe('AgentGraphView Component', () => {
     expect(screen.queryByText('Clique em qualquer bolinha para inspecionar')).not.toBeInTheDocument()
     expect(screen.queryByText('1. Traces & Spans')).not.toBeInTheDocument()
 
-    // O filtro de nós por imóvel está no toolbar interno do card
-    const cardToolbar = screen.getByRole('radiogroup', { name: 'Filtrar nós por imóvel' })
-    expect(cardToolbar).toBeInTheDocument()
+    // O dropbox de cidades/imóveis está dentro da div do grafo
+    const select = screen.getByRole('combobox', { name: 'Filtrar por Cidade ou Imóvel' })
+    expect(select).toBeInTheDocument()
+    expect(screen.getByText('Cidade / Imóvel:')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Filtrar por Cidade' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Filtrar por Imóvel' })).toBeInTheDocument()
   })
 })
 

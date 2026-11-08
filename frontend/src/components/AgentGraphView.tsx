@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { Property } from '../contracts'
+import { properties } from '../demo-data'
 import { propertyUrl } from '../routes'
 
 export interface AgentNode {
@@ -43,6 +44,18 @@ const PROPERTY_FLOW_SUMMARIES: Record<
     focusNodeId: 'node-3-adm',
     tone: 'waiting',
   },
+  'city:Fortaleza': {
+    statusLabel: 'Imóveis em Fortaleza (CE)',
+    summary: 'Casa Aurora com aprovação pendente; Loft Jardim e Vila Areia em operação regular.',
+    focusNodeId: 'node-3-adm',
+    tone: 'waiting',
+  },
+  'city:Recife': {
+    statusLabel: 'Imóveis em Recife (PE)',
+    summary: 'Studio Tech Porto Digital com atendimento comercial ativo no Nó 1.',
+    focusNodeId: 'node-1',
+    tone: 'success',
+  },
   'casa-aurora': {
     statusLabel: 'Aguardando aprovação do anfitrião (Passo 3.2)',
     summary: 'Chuveiro sem água quente · 3 orçamentos coletados pelo Nó 3 aguardam sua escolha para agendar.',
@@ -75,6 +88,39 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
   const [copiedTrace, setCopiedTrace] = useState(false)
 
   const propList = useMemo(() => propertiesList.slice(0, 4), [propertiesList])
+
+  const availableProperties = useMemo(() => {
+    const list = propList.length > 0 ? propList : properties
+    return list.map((p) => {
+      let city = 'Brasil'
+      if (p.location?.includes('Fortaleza')) city = 'Fortaleza'
+      else if (p.location?.includes('Recife')) city = 'Recife'
+      else if (p.location?.includes('Rio de Janeiro') || p.title?.includes('Copacabana')) city = 'Rio de Janeiro'
+      else if (p.location?.includes('São Paulo') || p.title?.includes('Vila Madalena')) city = 'São Paulo'
+      else if (p.location?.includes('Gramado') || p.title?.includes('Gramado')) city = 'Gramado'
+      else if (p.location?.includes(',')) {
+        const parts = p.location.split(',')
+        city = parts[parts.length - 1]?.trim() || p.neighborhood || 'Brasil'
+      } else if (p.neighborhood) {
+        city = p.neighborhood
+      }
+      return {
+        id: p.id,
+        title: p.title,
+        cityName: city,
+      }
+    })
+  }, [propList])
+
+  const availableCities = useMemo(() => {
+    const set = new Set<string>()
+    availableProperties.forEach((p) => {
+      if (p.cityName) set.add(p.cityName)
+    })
+    set.add('Fortaleza')
+    set.add('Recife')
+    return Array.from(set)
+  }, [availableProperties])
 
   const nodes: AgentNode[] = useMemo(
     () => [
@@ -411,13 +457,35 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
     return nodes.find((n) => n.id === selectedNodeId) ?? nodes[0]!
   }, [nodes, selectedNodeId])
 
-  const activeFilterSummary = PROPERTY_FLOW_SUMMARIES[selectedPropertyFilter] ?? PROPERTY_FLOW_SUMMARIES.all!
+  const isCityFilter = selectedPropertyFilter.startsWith('city:')
+  const selectedCity = isCityFilter ? selectedPropertyFilter.replace('city:', '') : ''
+
+  function isNodeCityMatch(propertyId: string | undefined, city: string): boolean {
+    if (!propertyId) return false
+    if (city === 'Fortaleza') {
+      return propertyId === 'casa-aurora' || propertyId === 'loft-jardim' || propertyId === 'vila-areia'
+    }
+    if (city === 'Recife') {
+      return propertyId === 'prop-portodigital-04'
+    }
+    if (city === 'Rio de Janeiro') {
+      return propertyId === 'prop-copacabana-01'
+    }
+    if (city === 'São Paulo') {
+      return propertyId === 'prop-vilamadalena-02'
+    }
+    return false
+  }
 
   function handleSelectPropertyFilter(filterId: string) {
     setSelectedPropertyFilter(filterId)
     const summary = PROPERTY_FLOW_SUMMARIES[filterId]
     if (summary) {
       setSelectedNodeId(summary.focusNodeId)
+    } else if (filterId.startsWith('city:')) {
+      const city = filterId.replace('city:', '')
+      if (city === 'Fortaleza') setSelectedNodeId('node-3-adm')
+      else setSelectedNodeId('node-1')
     }
   }
 
@@ -429,61 +497,65 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
 
   return (
     <div className="agent-graph-page" aria-label="Visualização do Grafo de Agentes e Imóveis">
-      {/* Cabeçalho direto e sem ruído */}
+      {/* Cabeçalho minimalista */}
       <div className="agent-graph-header">
-        <div className="agent-graph-title-row">
-          <div>
-            <h1>Grafo de Fases dos Agentes & Imóveis</h1>
-            <p className="agent-graph-lead">
-              Selecione um imóvel para destacar sua rota ativa ou clique em qualquer bolinha para inspecionar entradas,
-              saídas e telemetria no <strong>Langfuse</strong>.
-            </p>
-          </div>
-        </div>
-
-        {/* Barra de filtro por imóvel + resumo contextual imediato */}
-        <div className="graph-filter-container">
-          <div className="filter-pill-group" role="radiogroup" aria-label="Filtrar nós por imóvel">
-            <button
-              type="button"
-              className={`filter-pill ${selectedPropertyFilter === 'all' ? 'active' : ''}`}
-              onClick={() => handleSelectPropertyFilter('all')}
-            >
-              Todos os Imóveis
-            </button>
-            {propList.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className={`filter-pill ${selectedPropertyFilter === p.id ? 'active' : ''}`}
-                onClick={() => handleSelectPropertyFilter(p.id)}
-              >
-                {p.title}
-              </button>
-            ))}
-          </div>
-
-          <div className="filter-context-strip" aria-live="polite">
-            <span className={`status-indicator indicator-${activeFilterSummary.tone}`} />
-            <strong>{activeFilterSummary.statusLabel}:</strong>
-            <span>{activeFilterSummary.summary}</span>
-          </div>
-        </div>
+        <h1>Grafo de Fases dos Agentes & Imóveis</h1>
+        <p className="agent-graph-lead">
+          Selecione uma cidade ou imóvel para destacar sua rota operacional ou clique em qualquer etapa para inspecionar
+          telemetria, custos e governança no <strong>Langfuse</strong>.
+        </p>
       </div>
 
       {/* Layout Principal: Canvas + Inspetor Lateral */}
       <div className="graph-layout">
         <div className="graph-canvas-wrapper" aria-label="Canvas interativo do grafo">
-          <div className="graph-canvas-legend">
-            <span>
-              <i className="legend-dot prop-dot" /> Imóvel (Origem)
-            </span>
-            <span>
-              <i className="legend-dot router-dot" /> Etapa Concluída / Pronta
-            </span>
-            <span>
-              <i className="legend-dot resolver-dot" /> Aguardando Decisão Humana (Interrupt)
-            </span>
+          {/* Barra de ferramentas interna: Dropbox de Cidade / Imóvel + Legenda */}
+          <div className="graph-card-toolbar">
+            <div className="graph-filter-dropbox-wrap">
+              <label htmlFor="graph-city-select" className="graph-filter-label">
+                Cidade / Imóvel:
+              </label>
+              <div className="graph-select-shell">
+                <select
+                  id="graph-city-select"
+                  className="graph-city-select"
+                  value={selectedPropertyFilter}
+                  onChange={(e) => handleSelectPropertyFilter(e.target.value)}
+                  aria-label="Filtrar por Cidade ou Imóvel"
+                >
+                  <option value="all">Todas as Cidades e Imóveis</option>
+                  {availableCities.length > 0 && (
+                    <optgroup label="Filtrar por Cidade">
+                      {availableCities.map((city) => (
+                        <option key={`city-${city}`} value={`city:${city}`}>
+                          📍 {city} (Todos os imóveis)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Filtrar por Imóvel">
+                    {availableProperties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} ({p.cityName})
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                <span className="select-chevron" aria-hidden="true">▾</span>
+              </div>
+            </div>
+
+            <div className="graph-canvas-legend">
+              <span>
+                <i className="legend-dot prop-dot" /> Imóvel
+              </span>
+              <span>
+                <i className="legend-dot router-dot" /> Concluído
+              </span>
+              <span>
+                <i className="legend-dot resolver-dot" /> Aguardando ADM
+              </span>
+            </div>
           </div>
 
           <svg viewBox="0 0 1060 540" className="agent-graph-svg" role="img" aria-label="Diagrama do Grafo dos Agentes">
@@ -539,7 +611,11 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
               if (!sourceNode || !targetNode) return null
 
               const isEdgeActive =
-                selectedPropertyFilter === 'all' || edge.activeFor.includes(selectedPropertyFilter)
+                selectedPropertyFilter === 'all' ||
+                (isCityFilter
+                  ? (selectedCity === 'Fortaleza' && edge.activeFor.some((id) => ['all', 'casa-aurora', 'loft-jardim'].includes(id))) ||
+                    (selectedCity === 'Recife' && edge.activeFor.some((id) => ['all', 'prop-portodigital-04'].includes(id)))
+                  : edge.activeFor.includes(selectedPropertyFilter))
 
               const dx = targetNode.x - sourceNode.x
               const pathD = edge.curveBack
@@ -565,11 +641,15 @@ export function AgentGraphView({ navigate, propertiesList }: AgentGraphViewProps
               const isSelected = selectedNodeId === node.id
               const isPropertyMatch =
                 selectedPropertyFilter === 'all' ||
-                (node.propertyId && node.propertyId === selectedPropertyFilter) ||
+                (isCityFilter
+                  ? isNodeCityMatch(node.propertyId, selectedCity)
+                  : (node.propertyId && node.propertyId === selectedPropertyFilter)) ||
                 (node.type !== 'property' &&
-                  (selectedPropertyFilter === 'casa-aurora'
+                  (selectedPropertyFilter === 'casa-aurora' || (isCityFilter && selectedCity === 'Fortaleza')
                     ? node.id !== 'node-1'
-                    : selectedPropertyFilter === 'loft-jardim' || selectedPropertyFilter === 'prop-portodigital-04'
+                    : selectedPropertyFilter === 'loft-jardim' ||
+                        selectedPropertyFilter === 'prop-portodigital-04' ||
+                        (isCityFilter && selectedCity === 'Recife')
                       ? node.id === 'node-router' || node.id === 'node-1'
                       : node.id === 'node-router'))
 

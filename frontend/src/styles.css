@@ -1719,45 +1719,75 @@ button,a,input{transition:background-color .18s ease,border-color .18s ease,box-
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 14px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--mar-08);
 }
 
-.graph-card-toolbar .filter-pill-group {
+.graph-filter-dropbox-wrap {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+}
+
+.graph-filter-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mar-profundo);
+  white-space: nowrap;
+}
+
+.graph-select-shell {
+  position: relative;
+  display: inline-flex;
   align-items: center;
 }
 
-.filter-pill {
-  border: 1px solid var(--mar-16);
+.graph-city-select {
+  appearance: none;
+  -webkit-appearance: none;
   background: var(--areia);
-  color: var(--mar-profundo);
-  border-radius: 20px;
-  padding: 5px 12px;
-  font-size: 12.5px;
+  border: 1px solid var(--mar-16);
+  border-radius: 10px;
+  padding: 7px 32px 7px 12px;
+  font-size: 13px;
+  font-family: inherit;
   font-weight: 500;
+  color: var(--mar-profundo);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  outline: none;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.filter-pill:hover {
+.graph-city-select:hover {
   background: var(--branco);
   border-color: var(--mar-32);
-  transform: translateY(-1px);
 }
 
-.filter-pill:active {
-  transform: translateY(0);
+.graph-city-select:focus-visible {
+  border-color: var(--ambar);
+  box-shadow: 0 0 0 2px rgba(242, 165, 65, 0.25);
 }
 
-.filter-pill.active {
-  background: var(--mar-profundo);
-  color: var(--branco);
-  border-color: var(--mar-profundo);
-  font-weight: 600;
+.graph-city-select optgroup {
+  font-weight: 700;
+  color: var(--mar-profundo);
+  background: var(--branco);
+}
+
+.graph-city-select option {
+  font-weight: 500;
+  color: var(--mar-profundo);
+  background: var(--branco);
+  padding: 6px 10px;
+}
+
+.select-chevron {
+  position: absolute;
+  right: 12px;
+  font-size: 10px;
+  color: var(--mar-72);
+  pointer-events: none;
 }
 
 .graph-canvas-legend {
