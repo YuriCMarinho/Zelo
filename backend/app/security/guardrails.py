@@ -70,8 +70,7 @@ def validate_untrusted_input(text: str, role: str, run_id: str) -> str:
     if is_injection:
         reason = f"PROMPT_INJECTION_DETECTED: {reason_detail}"
         msg = (
-            f"Violação de segurança: tentativa de prompt injection "
-            f"detectada para o papel '{role}'."
+            f"Violação de segurança: tentativa de prompt injection detectada para o papel '{role}'."
         )
         logger.error(
             "Guardrail: Tentativa de Prompt Injection bloqueada",

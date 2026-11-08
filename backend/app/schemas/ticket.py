@@ -47,11 +47,26 @@ class TicketApprovalRequest(BaseSchema):
     run_id: str | None = Field(
         default=None,
         description=(
-            "UUID ou identificador da execução ponta a ponta. "
-            "Se omitido, usa o run_id do ticket."
+            "UUID ou identificador da execução ponta a ponta. Se omitido, usa o run_id do ticket."
         ),
     )
     provider_id: str = Field(..., min_length=1)
+    auto_confirm_date: bool | None = Field(
+        default=None,
+        description="Se True, confirma a janela agendada com o fornecedor via LLM.",
+    )
+
+
+class TicketRejectQuotesRequest(BaseSchema):
+    run_id: str | None = Field(
+        default=None,
+        description="UUID ou identificador da execução ponta a ponta.",
+    )
+    reason: str | None = Field(
+        default=None,
+        max_length=400,
+        description="Motivo da recusa dos orçamentos para orientar nova busca/cotação.",
+    )
 
 
 class MaintenanceTicketRead(TicketBase):
@@ -60,5 +75,6 @@ class MaintenanceTicketRead(TicketBase):
     selected_provider_id: str | None = None
     scheduled_date: datetime | None = None
     notify_tenant: bool = False
+    adm_synthesis: str | None = None
     created_at: datetime
     updated_at: datetime

@@ -11,6 +11,7 @@ interface QuotesComparisonProps {
   ticket: MaintenanceTicket | null
   quotes: Quote[]
   onApprove: (providerId: string) => Promise<void>
+  onRejectQuotes?: (reason: string) => Promise<void>
   onBack?: () => void
   isLoading?: boolean
 }
@@ -20,6 +21,7 @@ export function QuotesComparison({
   ticket,
   quotes,
   onApprove,
+  onRejectQuotes,
   onBack,
   isLoading = false,
 }: QuotesComparisonProps) {
@@ -30,6 +32,10 @@ export function QuotesComparison({
     return recommended ? recommended.provider_id : quotes[0]?.provider_id || null
   })
   const [submitting, setSubmitting] = useState(false)
+  const [rejectingMode, setRejectingMode] = useState(false)
+  const [rejectReason, setRejectReason] = useState(
+    'Gostaria de propostas com menor custo ou atendimento mais rápido.',
+  )
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const selectedQuote = quotes.find((q) => q.provider_id === selectedProviderId) || quotes[0]
@@ -81,6 +87,21 @@ export function QuotesComparison({
       await onApprove(selectedQuote.provider_id)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao aprovar orçamento.'
+      setErrorMsg(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleRejectAllQuotes() {
+    if (!onRejectQuotes || submitting) return
+    setSubmitting(true)
+    setErrorMsg(null)
+    try {
+      await onRejectQuotes(rejectReason.trim())
+      setRejectingMode(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao solicitar novos orçamentos.'
       setErrorMsg(msg)
     } finally {
       setSubmitting(false)
@@ -190,7 +211,12 @@ export function QuotesComparison({
           quotes.map((quote, index) => {
             const isSelected = (selectedProviderId || quotes[0]?.provider_id) === quote.provider_id
             const name = quote.provider_name || `Prestador ${index + 1}`
-            const rating = quote.provider_rating ? `${quote.provider_rating.toFixed(1)}` : '4.9'
+            const rating =
+              quote.provider_rating != null ? `${quote.provider_rating.toFixed(1)}` : '4.8'
+            const reviewsLabel =
+              quote.provider_reviews_count != null
+                ? ` (${quote.provider_reviews_count} avaliações no Google)`
+                : ''
 
             return (
               <div
@@ -212,8 +238,21 @@ export function QuotesComparison({
                   <div>
                     <h3 className="quote-provider-name">{name}</h3>
                     <span className="quote-provider-meta tabular-nums">
-                      ★ {rating} · Prestador homologado{quote.is_recommended ? ' · Melhor janela × custo' : ''}
+                      ★ {rating}{reviewsLabel} · Prestador homologado
+                      {quote.is_recommended ? ' · Melhor relação nota × custo' : ''}
                     </span>
+                    {quote.provider_address && (
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: '12px',
+                          color: 'var(--mar-72)',
+                          marginTop: '3px',
+                        }}
+                      >
+                        {quote.provider_address}
+                      </span>
+                    )}
                   </div>
                   <span className="quote-price tabular-nums">{money(quote.amount)}</span>
                 </div>
@@ -255,20 +294,87 @@ export function QuotesComparison({
         )}
 
         {isAwaitingApproval ? (
-          <button
-            type="button"
-            className="primary-approve-btn"
-            disabled={!selectedQuote || submitting || isLoading}
-            onClick={handleApprove}
-          >
-            {submitting ? (
-              'Confirmando aprovação...'
-            ) : selectedQuote ? (
-              `Aprovar ${selectedQuote.provider_name || 'prestador'} · ${money(selectedQuote.amount)}`
-            ) : (
-              'Selecione um orçamento'
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+            <button
+              type="button"
+              className="primary-approve-btn"
+              disabled={!selectedQuote || submitting || isLoading}
+              onClick={handleApprove}
+            >
+              {submitting ? (
+                'Processando decisão...'
+              ) : selectedQuote ? (
+                `Aprovar ${selectedQuote.provider_name || 'prestador'} · ${money(selectedQuote.amount)}`
+              ) : (
+                'Selecione um orçamento'
+              )}
+            </button>
+
+            {onRejectQuotes && !rejectingMode && (
+              <button
+                type="button"
+                className="action-secondary"
+                disabled={submitting || isLoading}
+                onClick={() => setRejectingMode(true)}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                Recusar propostas e solicitar novos orçamentos
+              </button>
             )}
-          </button>
+
+            {onRejectQuotes && rejectingMode && (
+              <div
+                style={{
+                  padding: '12px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--mar-24)',
+                  background: '#fff',
+                }}
+              >
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    marginBottom: '6px',
+                  }}
+                >
+                  Orientação para o agente renegociar / buscar novas propostas:
+                </label>
+                <input
+                  type="text"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Informe o motivo da recusa dos orçamentos..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--mar-24)',
+                    marginBottom: '8px',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="action-primary"
+                    disabled={submitting || !rejectReason.trim()}
+                    onClick={() => void handleRejectAllQuotes()}
+                  >
+                    {submitting ? 'Solicitando...' : 'Confirmar e pedir novas propostas'}
+                  </button>
+                  <button
+                    type="button"
+                    className="action-secondary"
+                    disabled={submitting}
+                    onClick={() => setRejectingMode(false)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         ) : isResolved ? (
           <div
             style={{

@@ -2,10 +2,12 @@
 
 from uuid import uuid4
 
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore  # type: ignore[import-untyped]
 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import-untyped]
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.db import session as database
 from app.db.models.property import Property
 from app.db.session import SessionLocal
 from app.observability.logger import logger
@@ -37,7 +39,11 @@ async def run_periodic_collection(collector: ProviderCollector | None = None) ->
 def create_provider_scheduler() -> AsyncIOScheduler:
     if settings.provider_collection_hours < 1:
         raise ValueError("PROVIDER_COLLECTION_HOURS deve ser >= 1")
-    scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler = AsyncIOScheduler(
+        timezone="UTC",
+        jobstores={"default": SQLAlchemyJobStore(engine=database.engine)},
+        job_defaults={"misfire_grace_time": None},
+    )
     scheduler.add_job(
         run_periodic_collection,
         trigger="interval",

@@ -19,9 +19,7 @@ CPF_FORMATTED_PATTERN = re.compile(r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b")
 CPF_RAW_PATTERN = re.compile(r"\b\d{11}\b")
 
 # E-mail padrão
-EMAIL_PATTERN = re.compile(
-    r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-)
+EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
 
 # Chaves de API, Tokens Bearer e Segredos
 BEARER_TOKEN_PATTERN = re.compile(r"\bBearer\s+[A-Za-z0-9_\-\.]{15,}\b", re.IGNORECASE)

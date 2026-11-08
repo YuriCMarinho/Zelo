@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -14,9 +14,7 @@ if TYPE_CHECKING:
 class Booking(Base):
     __tablename__ = "bookings"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     property_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -25,6 +23,10 @@ class Booking(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(50), default="confirmed", nullable=False)
+    total_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    num_guests: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

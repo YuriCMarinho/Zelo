@@ -10,14 +10,35 @@ const request = { propertyId: 'prop-copacabana-01', message: 'qual o horario do 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('atendimento conectado ao backend', () => {
+  it.each(['guest', 'cleaner'] as const)('restaura usuário e assistente no canal %s sem duplicar', async (channel) => {
+    vi.useFakeTimers()
+    const prop = properties[0]!
+    const sender = channel === 'cleaner' ? 'camareira' : 'hospede'
+    const records = [
+      { id: 'saved-user', property_id: prop.id, channel, sender, body: 'Minha pergunta' },
+      { id: 'saved-agent', property_id: prop.id, channel, sender: 'agent', body: 'Minha resposta' },
+      { id: 'wrong-channel', property_id: prop.id, channel: channel === 'guest' ? 'cleaner' : 'guest', sender, body: 'Outro canal' },
+    ].map((item) => ({ ...item, created_at: new Date().toISOString() }))
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(records)))))
+    const onNewMessage = vi.fn()
+    render(<ChatPanel property={prop} messages={[]} onNewMessage={onNewMessage} />)
+    if (channel === 'cleaner') fireEvent.click(screen.getByRole('button', { name: 'Camareira' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(onNewMessage.mock.calls.map(([item]) => item.sender)).toEqual([sender, 'agent'])
+    expect(onNewMessage.mock.calls.map(([item]) => item.id)).toEqual(['saved-user', 'saved-agent'])
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(onNewMessage).toHaveBeenCalledTimes(2)
+  })
+
   it.each([
-    { response: 'Olá!', delay: 7200, apiTime: 0 },
-    { response: 'a'.repeat(100), delay: 9800, apiTime: 0 },
-    { response: 'a'.repeat(400), delay: 14000, apiTime: 0 },
-    { response: 'Olá!', delay: 7200, apiTime: 5000 },
-    { response: 'Olá!', delay: 11200, apiTime: 10000 },
-    { response: 'a'.repeat(100), delay: 13800, apiTime: 10000 },
-  ])('aguarda $delay ms com API de $apiTime ms e mantém a digitação completa', async ({ response, delay, apiTime }) => {
+    { response: 'Olá!', delay: 4300, apiTime: 0 },
+    { response: 'a'.repeat(100), delay: 4450, apiTime: 0 },
+    { response: 'a'.repeat(400), delay: 4700, apiTime: 0 },
+    { response: 'Olá!', delay: 4300, apiTime: 500 },
+    { response: 'Olá!', delay: 4300, apiTime: 1000 },
+    { response: 'a'.repeat(100), delay: 4450, apiTime: 1000 },
+    { response: 'Olá!', delay: 6300, apiTime: 6000 },
+  ])('aguarda $delay ms com API de $apiTime ms e mantém a digitação ágil', async ({ response, delay, apiTime }) => {
     vi.useFakeTimers()
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const apiResponse = new Response(JSON.stringify({
@@ -36,11 +57,11 @@ describe('atendimento conectado ao backend', () => {
     expect(onNewMessage).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('Digitando resposta...')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled()
-    await act(async () => { await vi.advanceTimersByTimeAsync(5999) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(3999) })
     expect(screen.queryByText('Digitando resposta...')).not.toBeInTheDocument()
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(screen.getByText('Digitando resposta...')).toBeInTheDocument()
-    await act(async () => { await vi.advanceTimersByTimeAsync(delay - 6001) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(delay - 4001) })
     expect(onNewMessage).toHaveBeenCalledTimes(1)
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(onNewMessage).toHaveBeenCalledTimes(2)
@@ -57,16 +78,37 @@ describe('atendimento conectado ao backend', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Enviar mensagem' }))
     })
     expect(screen.getByRole('alert')).toBeInTheDocument()
-    await act(async () => { await vi.advanceTimersByTimeAsync(11000) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
     expect(screen.queryByText('Digitando resposta...')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeEnabled()
   })
 
-  it('retorna a resposta do agente e encaminha o imóvel e o remetente corretos', async () => {
+  it('retorna a resposta do agente e encaminha o imóvel, remetente, canal e sessão corretos', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ run_id: 'run-1', property_id: request.propertyId, route_destination: 'commercial_node1', response_text: 'Check-in a partir das 15h.', ticket_id: null })))
     vi.stubGlobal('fetch', fetchMock)
     expect((await sendChatMessage(request)).responseText).toBe('Check-in a partir das 15h.')
-    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({ property_id: request.propertyId, sender_role: 'tenant', message: request.message })
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body)
+    expect(body).toMatchObject({ property_id: request.propertyId, sender_role: 'tenant', channel: 'guest', message: request.message })
+    expect(body.session_id).toMatch(/^sess-/)
+  })
+
+  it('isola o histórico do Canal do Hóspede e do Canal da Camareira', async () => {
+    const prop = properties[0]!
+    const messages = [
+      { id: 'm1', propertyId: prop.id, channel: 'guest' as const, sender: 'hospede' as const, body: 'Quero reservar para dezembro', time: '10:00' },
+      { id: 'm2', propertyId: prop.id, channel: 'cleaner' as const, sender: 'camareira' as const, body: 'Vazamento encontrado na vistoria', time: '10:05' },
+    ]
+    const user = userEvent.setup()
+    render(<ChatPanel property={prop} messages={messages} onNewMessage={vi.fn()} />)
+
+    // No canal Hóspede (padrão), exibe apenas a mensagem do hóspede
+    expect(screen.getByText('Quero reservar para dezembro')).toBeInTheDocument()
+    expect(screen.queryByText('Vazamento encontrado na vistoria')).not.toBeInTheDocument()
+
+    // Ao alternar para Camareira, exibe apenas o histórico operacional da camareira
+    await user.click(screen.getByRole('button', { name: 'Camareira' }))
+    expect(screen.getByText('Vazamento encontrado na vistoria')).toBeInTheDocument()
+    expect(screen.queryByText('Quero reservar para dezembro')).not.toBeInTheDocument()
   })
 
   it.each([404, 500, 503])('não inventa uma resposta quando a API retorna HTTP %s', async (status) => {

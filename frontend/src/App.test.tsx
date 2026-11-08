@@ -45,17 +45,14 @@ describe('navegação por imóvel', () => {
     expect(screen.queryByText('Mensagem da Aurora')).not.toBeInTheDocument()
   })
 
-  it('permite escolher um orçamento apenas na demonstração local', async () => {
-    const user = userEvent.setup()
+  it('unifica a aba legada orcamentos diretamente na sessão Agente ⇄ Anfitrião', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(Response.json([]))))
     expect(parseRoute('/imoveis/casa-aurora', '?aba=orcamentos')).toEqual({ view: 'property', propertyId: 'casa-aurora', tab: 'orcamentos' })
+    window.history.replaceState(null, '', '/imoveis/casa-aurora?aba=orcamentos')
     render(<App />)
-    await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
-    await user.click(screen.getByRole('link', { name: 'Orçamentos' }))
-    await user.click(screen.getByRole('radio', { name: /Volt Reparos/ }))
-    expect(screen.getByRole('radio', { name: /Volt Reparos/ })).toHaveAttribute('aria-checked', 'true')
-    await user.click(screen.getByRole('button', { name: /Escolher Volt Reparos/ }))
-    expect(screen.getByText('Escolha simulada')).toBeInTheDocument()
-    expect(screen.getByText(/nenhuma contratação ou agendamento/)).toBeInTheDocument()
+    expect(await screen.findByText(/Somente as decisões deste imóvel/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Orçamentos' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Volt Reparos')).not.toBeInTheDocument()
   })
   it('não inventa chamados ou orçamentos quando o imóvel não tem atendimento', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(Response.json([]))))
@@ -110,5 +107,47 @@ describe('navegação por imóvel', () => {
     await user.click(mobileLinks[mobileLinks.length - 1]!)
     expect(screen.getByRole('button', { name: '+ Nova reserva' })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Navegação mobile' })).not.toBeInTheDocument()
+  })
+
+  it('abre o menu de perfil ao clicar no avatar e navega para configurações', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const avatarBtn = screen.getByRole('button', { name: 'Perfil do anfitrião' })
+    expect(avatarBtn).toBeInTheDocument()
+    expect(avatarBtn).toHaveAttribute('aria-expanded', 'false')
+
+    // Clica no avatar para abrir o dropdown
+    await user.click(avatarBtn)
+    expect(avatarBtn).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('menu', { name: 'Opções do perfil' })).toBeInTheDocument()
+    expect(screen.getByText('Anfitrião')).toBeInTheDocument()
+    expect(screen.getByText('anfitriao@zelo.app')).toBeInTheDocument()
+
+    // Clica na opção Configurações
+    const settingsItem = screen.getByRole('menuitem', { name: 'Configurações' })
+    expect(settingsItem).toBeInTheDocument()
+    await user.click(settingsItem)
+
+    // Confirma que navegou para a página de configurações e o menu fechou
+    expect(screen.getByRole('heading', { name: 'Configurações' })).toBeInTheDocument()
+    expect(screen.queryByRole('menu', { name: 'Opções do perfil' })).not.toBeInTheDocument()
+  })
+
+  it('fecha o menu de perfil ao pressionar Escape ou clicar fora', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    const avatarBtn = screen.getByRole('button', { name: 'Perfil do anfitrião' })
+    await user.click(avatarBtn)
+    expect(screen.getByRole('menu', { name: 'Opções do perfil' })).toBeInTheDocument()
+
+    // Pressiona Escape para fechar
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu', { name: 'Opções do perfil' })).not.toBeInTheDocument()
+
+    // Abre novamente e clica fora para fechar
+    await user.click(avatarBtn)
+    expect(screen.getByRole('menu', { name: 'Opções do perfil' })).toBeInTheDocument()
+    await user.click(document.body)
+    expect(screen.queryByRole('menu', { name: 'Opções do perfil' })).not.toBeInTheDocument()
   })
 })

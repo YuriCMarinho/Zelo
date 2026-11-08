@@ -28,6 +28,7 @@ function backend() {
   const state = { ticket, quote, approvalFails: false, dateRefusals: 0 }
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.endsWith(`/properties/${property.id}/tickets`)) return Response.json([ticket])
+    if (url.endsWith(`/properties/${property.id}/bookings`)) return Response.json([])
     if (url.endsWith(`/tickets/${ticket.id}/quotes`)) return Response.json([quote])
     if (url.endsWith(`/quotes/${quote.provider_id}/response`)) {
       const body = JSON.parse(String(init?.body))
@@ -134,4 +135,136 @@ it('escala ao anfitrião depois de três recusas sem anunciar uma nova proposta'
   }
   expect(await screen.findByText(/tentativas de data se esgotaram/)).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Prestador aceita a data/ })).not.toBeInTheDocument()
+})
+
+it('permite ao anfitrião aceitar ou recusar solicitações de hospedagem com notificação no chat', async () => {
+  const pendingBooking = {
+    id: 'book-pending-1',
+    property_id: property.id,
+    guest_name: 'Hóspede Interessado (a1b2)',
+    guest_contact: '(81) 99999-1111',
+    start_date: '2026-12-15',
+    end_date: '2026-12-18',
+    status: 'pending_approval',
+    total_price: 960,
+    num_guests: 2,
+    created_at: '2026-11-08T12:00:00Z',
+  }
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith(`/properties/${property.id}/tickets`)) return Response.json([])
+    if (url.endsWith(`/properties/${property.id}/bookings`)) return Response.json([pendingBooking])
+    if (url.endsWith(`/bookings/${pendingBooking.id}/approve`)) {
+      const body = JSON.parse(String(init?.body || '{}'))
+      pendingBooking.status = 'confirmed'
+      if (body.final_price) pendingBooking.total_price = body.final_price
+      return Response.json(pendingBooking)
+    }
+    throw new Error(`Requisição inesperada: ${url}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  const onNewMessage = vi.fn()
+  render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={onNewMessage} />)
+
+  expect(await screen.findByText(/Hóspede Interessado \(a1b2\)/)).toBeInTheDocument()
+  const approveBtn = await screen.findByRole('button', { name: /Aceitar Reserva/ })
+  await user.click(approveBtn)
+
+  expect(await screen.findByRole('status')).toHaveTextContent(/confirmada/)
+  expect(onNewMessage).toHaveBeenCalledTimes(1)
+  expect(onNewMessage.mock.calls[0]![0].body).toMatch(/aprovou sua reserva/i)
+})
+
+it('exibe 3 fornecedores com nota real do Google, endereço e permite recusar propostas para nova cotação', async () => {
+  const ticket: MaintenanceTicket = {
+    id: 'ticket-3prov',
+    property_id: property.id,
+    run_id: 'run-3prov',
+    reported_by_role: 'tenant',
+    category: 'electrician',
+    urgency: 'urgent',
+    location_in_property: 'Suíte',
+    description: 'Chuveiro elétrico não esquenta',
+    status: 'awaiting_adm_approval',
+    notify_tenant: true,
+    adm_synthesis: '3 eletricistas do Recife enviaram propostas detalhadas.',
+    created_at: '2026-11-08T12:00:00Z',
+  }
+  const quotes: Quote[] = [
+    {
+      id: 'q1',
+      ticket_id: ticket.id,
+      run_id: ticket.run_id,
+      provider_id: 'p1',
+      provider_name: 'Capibaribe Soluções Elétricas',
+      provider_rating: 4.9,
+      provider_reviews_count: 219,
+      provider_address: 'Cais do Apolo, 410 - Bairro do Recife',
+      amount: 165,
+      description: 'Troca de resistência blindada com garantia de 90 dias',
+      proposed_availability: 'Hoje em até 2h',
+      status: 'received',
+      is_recommended: true,
+    },
+    {
+      id: 'q2',
+      ticket_id: ticket.id,
+      run_id: ticket.run_id,
+      provider_id: 'p2',
+      provider_name: 'PortoVolt Engenharia Elétrica',
+      provider_rating: 4.8,
+      provider_reviews_count: 154,
+      provider_address: 'Rua da Guia, 202 - Bairro do Recife',
+      amount: 210,
+      description: 'Reparo elétrico completo do chuveiro e disjuntor',
+      proposed_availability: 'Hoje à tarde',
+      status: 'received',
+      is_recommended: false,
+    },
+    {
+      id: 'q3',
+      ticket_id: ticket.id,
+      run_id: ticket.run_id,
+      provider_id: 'p3',
+      provider_name: 'EletroPernambuco Instalações',
+      provider_rating: 4.6,
+      provider_reviews_count: 87,
+      provider_address: 'Av. Marquês de Olinda, 190 - Bairro do Recife',
+      amount: 145,
+      description: 'Troca rápida do elemento aquecedor',
+      proposed_availability: 'Amanhã às 08h30',
+      status: 'received',
+      is_recommended: false,
+    },
+  ]
+
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith(`/properties/${property.id}/tickets`)) return Response.json([ticket])
+    if (url.endsWith(`/properties/${property.id}/bookings`)) return Response.json([])
+    if (url.endsWith(`/tickets/${ticket.id}/quotes`)) return Response.json(quotes)
+    if (url.endsWith(`/tickets/${ticket.id}/reject-quotes`)) {
+      const body = JSON.parse(String(init?.body || '{}'))
+      quotes[0]!.amount = 148
+      ticket.adm_synthesis = `Propostas renegociadas (${body.reason})`
+      return Response.json(ticket)
+    }
+    throw new Error(`Requisição inesperada: ${url}`)
+  })
+  vi.stubGlobal('fetch', fetchMock)
+
+  const user = userEvent.setup()
+  render(<PropertyWorkspace property={property} tab="adm" messages={[]} onNewMessage={vi.fn()} />)
+
+  expect(await screen.findByText('Capibaribe Soluções Elétricas')).toBeInTheDocument()
+  expect(screen.getByText('PortoVolt Engenharia Elétrica')).toBeInTheDocument()
+  expect(screen.getByText('EletroPernambuco Instalações')).toBeInTheDocument()
+  expect(screen.getByText(/219 avaliações no Google/)).toBeInTheDocument()
+  expect(screen.getByText(/Cais do Apolo, 410/)).toBeInTheDocument()
+  expect(screen.getByText('Ciclo do Chamado (Fluxo C)')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: /Recusar propostas e solicitar novos orçamentos/ }))
+  await user.click(screen.getByRole('button', { name: /Confirmar e pedir novas propostas/ }))
+
+  expect(await screen.findByText(/Propostas renegociadas/)).toBeInTheDocument()
 })

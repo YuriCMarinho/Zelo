@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { ChatMessage, MaintenanceTicket, Occupancy, Property, PropertyTab } from './contracts'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { BookingItem, ChatMessage, MaintenanceTicket, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
 import { AgentGraphView } from './components/AgentGraphView'
-import { fetchProperties, fetchTickets, resetDemoData } from './api/client'
+import { fetchProperties, fetchPropertyBookings, fetchTickets, resetDemoData } from './api/client'
 import { maintenanceOccupancy } from './maintenance-calendar'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
@@ -16,7 +16,6 @@ const tabs: { id: PropertyTab; label: string }[] = [
   { id: 'visao-geral', label: 'Visão geral' },
   { id: 'chat', label: 'Chat do imóvel' },
   { id: 'adm', label: 'Agente ⇄ Anfitrião' },
-  { id: 'orcamentos', label: 'Orçamentos' },
 ]
 
 function ZeloMark({ size = 40, transparent = false }: { size?: number; transparent?: boolean }) {
@@ -26,15 +25,39 @@ function ZeloMark({ size = 40, transparent = false }: { size?: number; transpare
 function Header({ navigate, route }: { navigate: (url: string) => void; route: Route }) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const profileMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!profileMenuOpen) return
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProfileMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [profileMenuOpen])
 
   const handleReset = async () => {
     setIsResetting(true)
+    setResetError('')
     try {
       await resetDemoData()
       window.location.href = '/'
-    } catch {
-      setShowConfirm(false)
+    } catch (cause) {
+      setResetError(cause instanceof Error ? cause.message : 'Não foi possível reinicializar os dados.')
     } finally {
       setIsResetting(false)
     }
@@ -45,7 +68,6 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
     { url: '/agentes', label: 'Grafo de Agentes', view: 'agentes' },
     { url: '/reservas', label: 'Reservas', view: 'reservas' },
     { url: '/manutencao', label: 'Manutenção', view: 'manutencao' },
-    { url: '/configuracoes', label: 'Configurações', view: 'configuracoes' },
     { url: '/auditoria', label: 'Auditoria', view: 'auditoria' },
   ]
 
@@ -76,7 +98,45 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
           >
             ↻ Resetar Demo
           </button>
-          <div className="avatar" aria-label="Perfil do anfitrião">A</div>
+          <div className="profile-menu-container" ref={profileMenuRef}>
+            <button
+              type="button"
+              className={`avatar-btn ${profileMenuOpen ? 'open' : ''}`}
+              onClick={() => setProfileMenuOpen((prev) => !prev)}
+              aria-label="Perfil do anfitrião"
+              aria-expanded={profileMenuOpen}
+              aria-haspopup="menu"
+            >
+              <span className="avatar" aria-hidden="true">A</span>
+            </button>
+            {profileMenuOpen && (
+              <div className="profile-dropdown" role="menu" aria-label="Opções do perfil">
+                <div className="profile-dropdown-header">
+                  <span className="avatar avatar-sm" aria-hidden="true">A</span>
+                  <div className="profile-dropdown-user">
+                    <strong>Anfitrião</strong>
+                    <span>anfitriao@zelo.app</span>
+                  </div>
+                </div>
+                <div className="profile-dropdown-divider" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`profile-dropdown-item ${route.view === 'configuracoes' ? 'active' : ''}`}
+                  onClick={() => {
+                    setProfileMenuOpen(false)
+                    navigate('/configuracoes')
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <span>Configurações</span>
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className={`mobile-menu-btn ${mobileMenuOpen ? 'open' : ''}`}
@@ -145,6 +205,7 @@ function Header({ navigate, route }: { navigate: (url: string) => void; route: R
                 {isResetting ? 'Reinicializando...' : 'Confirmar Reset'}
               </button>
             </div>
+            {resetError && <p role="alert">{resetError}</p>}
           </div>
         </div>
       )}
@@ -221,6 +282,7 @@ function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
 
 function Overview({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([])
+  const [remoteBookings, setRemoteBookings] = useState<BookingItem[]>([])
   const [calendarError, setCalendarError] = useState('')
   useEffect(() => {
     let active = true
@@ -230,13 +292,24 @@ function Overview({ property, navigate }: { property: Property; navigate: (url: 
       }).catch(() => {
         if (active) setCalendarError('Não foi possível atualizar as visitas de manutenção no calendário.')
       })
+      fetchPropertyBookings(property.id).then((items) => {
+        if (active) setRemoteBookings(items)
+      }).catch(() => {})
     }
     refresh()
     const timer = window.setInterval(refresh, 15000)
     window.addEventListener('focus', refresh)
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh) }
   }, [property.id])
-  const occupancy = [...property.occupancy, ...maintenanceOccupancy(tickets, property.id)]
+  const confirmedBookingsOccupancy: Occupancy[] = remoteBookings
+    .filter((b) => b.status === 'confirmed' || b.status === 'active')
+    .map((b) => ({
+      startDate: b.start_date,
+      endDate: b.end_date,
+      status: 'reserved' as const,
+      label: `Reserva confirmada · ${b.guest_name}`,
+    }))
+  const occupancy = [...property.occupancy, ...confirmedBookingsOccupancy, ...maintenanceOccupancy(tickets, property.id)]
   return (
     <div className="overview-grid">
       <div>
@@ -281,102 +354,6 @@ function Overview({ property, navigate }: { property: Property; navigate: (url: 
         {calendarError && <p role="alert" className="form-error">{calendarError}</p>}
       </aside>
     </div>
-  )
-}
-
-const sampleQuotes = [
-  { id: 'carlos', name: 'Carlos Eletricista', rating: '4,9 · 128 avaliações', price: 180, when: 'Amanhã, 9h', note: 'Recomendado' },
-  { id: 'volt', name: 'Volt Reparos', rating: '4,7 · 64 avaliações', price: 240, when: 'Hoje, 17h', note: '' },
-  { id: 'joao', name: 'João Faz-Tudo', rating: '4,5 · 21 avaliações', price: 150, when: 'Sexta, 14h', note: '' },
-] as const
-
-function QuotesPanel({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
-  const [selected, setSelected] = useState<string>('carlos')
-  const [confirmed, setConfirmed] = useState(false)
-  const choice = sampleQuotes.find((quote) => quote.id === selected) ?? sampleQuotes[0]
-  return (
-    <section className="quotes-layout" aria-labelledby="quotes-heading">
-      <div className="quotes-main">
-        <div
-          style={{
-            background: 'var(--mar-08)',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            marginBottom: '16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <span>
-            Simulação rápida de comparativo. Para aprovar chamados reais dos agentes, acesse{' '}
-            <strong>Agente ⇄ Anfitrião</strong>.
-          </span>
-          <button
-            type="button"
-            className="action-primary"
-            style={{ padding: '6px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
-            onClick={() => navigate(propertyUrl(property.id, 'adm'))}
-          >
-            Ir para Agente ⇄ Anfitrião ↗
-          </button>
-        </div>
-        <div className="quotes-intro">
-          <span className="status-pill">{confirmed ? 'Escolha simulada' : 'Aguardando sua decisão'}</span>
-          <h2 id="quotes-heading">Chuveiro sem água quente</h2>
-          <p>3 de 5 eletricistas consultados enviaram orçamento. O hóspede já foi informado do acompanhamento.</p>
-        </div>
-        <div className="quote-list" role="radiogroup" aria-label="Escolha um orçamento">
-          {sampleQuotes.map((quote) => (
-            <button
-              type="button"
-              role="radio"
-              aria-checked={selected === quote.id}
-              key={quote.id}
-              className={`quote-card ${selected === quote.id ? 'selected' : ''}`}
-              onClick={() => {
-                setSelected(quote.id)
-                setConfirmed(false)
-              }}
-            >
-              <span className="quote-card-top">
-                <span>
-                  <strong>{quote.name}</strong>
-                  <small>
-                    {quote.rating}
-                    {quote.note ? ` · ${quote.note}` : ''}
-                  </small>
-                </span>
-                <b className="tabular-nums">{money(quote.price)}</b>
-              </span>
-              <span className="quote-time">{quote.when}</span>
-            </button>
-          ))}
-        </div>
-        <div className="quote-action">
-          <button type="button" onClick={() => setConfirmed(true)}>
-            {confirmed ? 'Simulação concluída' : `Escolher ${choice.name} · ${money(choice.price)}`}
-          </button>
-          <p>Simulação local: nenhuma contratação ou agendamento é realizado.</p>
-        </div>
-      </div>
-      <aside className="quotes-aside">
-        <h3>Como funciona a aprovação</h3>
-        <p>O Nó 3 coleta cotações sem negociar preço e pausa até sua escolha explícita antes de agendar a visita.</p>
-        <div className="quote-steps">
-          <span>
-            1. <strong>Orçamentos recebidos</strong>
-          </span>
-          <span>
-            2. <strong>Sua aprovação</strong>
-          </span>
-          <span>
-            3. <strong>Agendamento na janela ideal</strong>
-          </span>
-        </div>
-      </aside>
-    </section>
   )
 }
 
@@ -466,10 +443,13 @@ function PropertyPage({
       <div className="tab-content" key={property.id}>
         {tab === 'visao-geral' ? (
           <Overview property={property} navigate={navigate} />
-        ) : tab === 'orcamentos' ? (
-          <QuotesPanel property={property} navigate={navigate} />
         ) : (
-          <PropertyWorkspace property={property} tab={tab} messages={messages} onNewMessage={sendMessage} />
+          <PropertyWorkspace
+            property={property}
+            tab={tab === 'orcamentos' ? 'adm' : tab}
+            messages={messages}
+            onNewMessage={sendMessage}
+          />
         )}
       </div>
     </main>

@@ -22,30 +22,32 @@ from app.services.provider_collector import (
     ProviderCandidate,
     ProviderCollector,
     SimulatedContactGateway,
+    WebMapsPlacesAdapter,
     collect_on_demand,
+    ensure_three_validated_providers,
     make_collector,
     reserve_places_call,
 )
 
 
 @pytest.mark.asyncio
-async def test_fixture_only_persists_explicit_confirmation(db_session: Session) -> None:
+async def test_web_maps_collector_persists_confirmed_providers(db_session: Session) -> None:
     collector = make_collector()
     result = await collector.collect(db_session, ProviderCategory.PLUMBER, "Fortaleza, CE")
 
     UUID(result.run_id)
-    assert result.discovered == 2
-    assert result.confirmed == 1
-    assert result.refused == 1
+    assert result.source == "WebMapsPlacesAdapter"
+    assert result.discovered == 3
+    assert result.confirmed == 3
+    assert result.refused == 0
     providers = db_session.scalars(select(Provider)).all()
-    assert len(providers) == 1
-    assert providers[0].is_validated is True
-    assert providers[0].phone == "+55 11 90000-0001"
+    assert len(providers) == 3
+    assert all(p.is_validated is True for p in providers)
+    assert all(p.source == "web_maps" for p in providers)
     events = db_session.scalars(select(AuditEvent).where(AuditEvent.run_id == result.run_id)).all()
     assert {event.event_type for event in events} == {
         "collection_started",
         "contact_confirmed",
-        "contact_not_confirmed",
     }
     assert all("phone" not in event.payload for event in events)
 
@@ -90,12 +92,14 @@ async def test_fallback_collects_only_when_no_validated_provider(db_session: Ses
         db_session, ProviderCategory.PAINTER, "Fortaleza, CE", collector
     )
     assert first is not None
-    assert first.confirmed == 1
+    assert first.confirmed == 3
     assert (
         await collect_on_demand(db_session, ProviderCategory.PAINTER, "Fortaleza, CE", collector)
         is None
     )
-    assert db_session.scalars(select(Provider).where(Provider.is_validated.is_(True))).one()
+    assert (
+        len(db_session.scalars(select(Provider).where(Provider.is_validated.is_(True))).all()) == 3
+    )
 
 
 @pytest.mark.asyncio
@@ -235,3 +239,31 @@ def test_places_quota_is_persisted_between_adapter_instances(db_session: Session
     ).all()
     assert len(events) == 1
     assert events[0].run_id == "run-a"
+
+
+@pytest.mark.asyncio
+async def test_web_maps_adapter_returns_three_providers_with_ratings_and_addresses(
+    db_session: Session,
+) -> None:
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http_client:
+        adapter = WebMapsPlacesAdapter(client=http_client)
+        recife_elec = await adapter.search(ProviderCategory.ELECTRICIAN, "Recife", limit=3)
+        assert len(recife_elec) == 3
+        assert len({c.name for c in recife_elec}) == 3
+        assert all(c.rating is not None and 4.5 <= c.rating <= 5.0 for c in recife_elec)
+        assert all(c.reviews_count >= 50 for c in recife_elec)
+        assert all(c.address and "Recife" in c.address for c in recife_elec)
+
+    found = await ensure_three_validated_providers(
+        db=db_session,
+        category=ProviderCategory.PLUMBER,
+        city="São Paulo",
+        run_id="run-web-maps-test",
+    )
+    assert len(found) == 3
+    assert all(p.is_validated for p in found)
+    assert all(p.reviews_count > 40 for p in found)
+    assert all(p.address and "São Paulo" in p.address for p in found)

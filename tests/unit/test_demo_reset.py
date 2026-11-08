@@ -77,17 +77,11 @@ def test_demo_reset_cleans_transient_data_and_reseeds(
         == 0
     )
     assert (
-        db_session.query(MaintenanceTicket)
-        .filter(MaintenanceTicket.id == "ticket-demo-01")
-        .count()
+        db_session.query(MaintenanceTicket).filter(MaintenanceTicket.id == "ticket-demo-01").count()
         == 1
     )
 
     # 4. Confere se o evento de auditoria foi gravado
-    audit = (
-        db_session.query(AuditEvent)
-        .filter(AuditEvent.event_type == "DEMO_RESET")
-        .first()
-    )
+    audit = db_session.query(AuditEvent).filter(AuditEvent.event_type == "DEMO_RESET").first()
     assert audit is not None
     assert audit.node == "system_demo"

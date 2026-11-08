@@ -11,6 +11,7 @@ class PropertyBase(BaseSchema):
     address: str = Field(..., description="Endereço do imóvel")
     city: str = Field(..., description="Cidade")
     state: str = Field(..., max_length=2, description="UF do estado (ex: RJ, SP)")
+    nightly_rate: float = Field(default=350.0, gt=0, description="Valor da diária em R$")
     rules_faq: str | None = Field(None, description="Regras da casa e FAQ do imóvel")
 
 

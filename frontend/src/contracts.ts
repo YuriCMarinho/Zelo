@@ -33,12 +33,30 @@ export interface Property {
 export interface ChatMessage {
   id: string
   propertyId: PropertyId
-  channel: 'guest' | 'admin'
+  channel: 'guest' | 'cleaner' | 'admin'
   sender: 'agent' | 'hospede' | 'camareira' | 'anfitriao'
   body: string
   time: string
   ticketId?: string | null
+  bookingId?: string | null
   scheduledDate?: string | null
+  suggestedActions?: string[]
+}
+
+export interface BookingItem {
+  id: string
+  property_id: string
+  guest_name: string
+  guest_contact: string
+  start_date: string
+  end_date: string
+  status: 'pending_approval' | 'confirmed' | 'active' | 'rejected' | 'cancelled' | string
+  total_price?: number | null
+  num_guests?: number
+  rejection_reason?: string | null
+  session_id?: string | null
+  notes?: string | null
+  created_at: string
 }
 
 export interface MaintenanceTicket {
@@ -84,6 +102,8 @@ export interface Quote {
   provider_id: string
   provider_name?: string | null
   provider_rating?: number | null
+  provider_reviews_count?: number | null
+  provider_address?: string | null
   amount: number | null
   description?: string | null
   proposed_availability?: string | null

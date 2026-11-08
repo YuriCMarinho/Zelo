@@ -13,7 +13,7 @@ from app.core.llm import generate
 from app.db.models import CostRecord
 from app.demo.replay import RecordedDemoError, recordings
 from app.observability.langfuse_client import langfuse_client
-from app.services.provider_collector import FixturePlacesAdapter, make_collector
+from app.services.provider_collector import WebMapsPlacesAdapter, make_collector
 
 
 @pytest.fixture
@@ -23,27 +23,47 @@ def offline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(httpx, "AsyncClient", Mock(side_effect=AssertionError("Rede proibida")))
     monkeypatch.setattr(langfuse_client, "_client", Mock())
     monkeypatch.setattr(
-        langfuse_client, "_init_client",
+        langfuse_client,
+        "_init_client",
         Mock(side_effect=AssertionError("Langfuse externo proibido")),
     )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("key", [
-    "router.commercial", "router.maintenance", "commercial.greeting", "commercial.unavailable",
-    "validator_node2", "resolver_adm_summary", "resolver_notify_tenant", "scraper_nodeS",
-])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "router.commercial",
+        "router.maintenance",
+        "commercial.greeting",
+        "commercial.unavailable",
+        "validator_node2",
+        "resolver_adm_summary",
+        "resolver_notify_tenant",
+        "scraper_nodeS",
+    ],
+)
 async def test_recorded_scenarios_run_without_network_and_bill_zero(
-    key: str, offline: None, db_session: Session,
+    key: str,
+    offline: None,
+    db_session: Session,
 ) -> None:
     entry = recordings()[key]
     messages = entry["messages"]
     if key == "resolver_notify_tenant":
-        messages = [{"role": "user", "content": (
-            "Serviço: Vazamento na cozinha. Data/Hora: 2026-11-10T14:00:00+00:00."
-        )}]
+        messages = [
+            {
+                "role": "user",
+                "content": ("Serviço: Vazamento na cozinha. Data/Hora: 2026-11-10T14:00:00+00:00."),
+            }
+        ]
     response = await generate(
-        messages, entry["model"], 320, run_id=f"replay-{key}", node=entry["node"], db=db_session,
+        messages,
+        entry["model"],
+        320,
+        run_id=f"replay-{key}",
+        node=entry["node"],
+        db=db_session,
     )
     assert response.content
     assert response.cost_usd == 0
@@ -70,7 +90,8 @@ def test_recordings_have_real_capture_provenance() -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_mode_never_falls_back_to_paid_inference(
-    offline: None, monkeypatch: pytest.MonkeyPatch,
+    offline: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "llm_mode", "typo")
     with pytest.raises(ValueError, match="LLM_MODE inválido"):
@@ -89,8 +110,12 @@ async def test_recorded_structured_output_is_validated(offline: None) -> None:
         confirmed: bool
 
     response = await generate(
-        [{"role": "user", "content": "Talvez."}], "Qwen/Qwen3.5-4B", 64,
-        run_id="contact-replay", node="scraper_nodeS", response_format=Decision,
+        [{"role": "user", "content": "Talvez."}],
+        "Qwen/Qwen3.5-4B",
+        64,
+        run_id="contact-replay",
+        node="scraper_nodeS",
+        response_format=Decision,
     )
     assert isinstance(response.parsed, Decision)
     assert response.parsed.confirmed is False
@@ -98,23 +123,29 @@ async def test_recorded_structured_output_is_validated(offline: None) -> None:
 
 @pytest.mark.asyncio
 async def test_contingency_still_works_when_inference_budget_is_exhausted(
-    offline: None, monkeypatch: pytest.MonkeyPatch,
+    offline: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "max_cost_global_usd", 0)
     response = await generate(
-        [{"role": "user", "content": "Olá!"}], "Qwen/Qwen3.5-9B", 256,
-        run_id="exhausted-budget-replay", node="commercial_node1",
+        [{"role": "user", "content": "Olá!"}],
+        "Qwen/Qwen3.5-9B",
+        256,
+        run_id="exhausted-budget-replay",
+        node="commercial_node1",
     )
     assert response.cost_usd == 0
 
 
 @pytest.mark.parametrize("mode", ["recorded_demo", "RECORDED_DEMO"])
 def test_contingency_forces_local_provider_source(
-    offline: None, monkeypatch: pytest.MonkeyPatch, mode: str,
+    offline: None,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
 ) -> None:
     monkeypatch.setattr(settings, "llm_mode", mode)
     monkeypatch.setattr(settings, "provider_source", "google_places")
-    assert isinstance(make_collector().source, FixturePlacesAdapter)
+    assert isinstance(make_collector().source, WebMapsPlacesAdapter)
 
 
 def test_missing_recordings_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:

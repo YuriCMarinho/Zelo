@@ -18,6 +18,7 @@ describe('AgentGraphView Component', () => {
     expect(screen.getAllByText('Casa Aurora').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Loft Jardim').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Studio Tech/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('Vila Areia')).not.toBeInTheDocument()
     expect(screen.getAllByText(/Roteador/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Nó 1: Comercial/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Nó 2: Validador/).length).toBeGreaterThanOrEqual(1)

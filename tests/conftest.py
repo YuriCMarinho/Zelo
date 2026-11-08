@@ -11,6 +11,9 @@ if str(backend_dir) not in sys.path:
 # Configura banco em memória antes de qualquer importação de app/engine
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["ENVIRONMENT"] = "testing"
+os.environ["LLM_MODE"] = "mock"
+os.environ["LANGFUSE_PUBLIC_KEY"] = "mock-public"
+os.environ["LANGFUSE_SECRET_KEY"] = "mock-secret"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -36,6 +39,10 @@ def bind_test_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.db.session.engine", test_engine)
     monkeypatch.setattr("app.db.session.SessionLocal", TestingSessionLocal)
     monkeypatch.setattr("app.agents.resolver_graph.SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr("app.core.config.settings.llm_mode", "mock")
+    monkeypatch.setattr("app.core.config.settings.provider_source", "fixture")
+    monkeypatch.setattr("app.core.config.settings.langfuse_public_key", "mock-public")
+    monkeypatch.setattr("app.core.config.settings.langfuse_secret_key", "mock-secret")
 
 
 @pytest.fixture(scope="function")
@@ -77,4 +84,3 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         for item in items:
             if "real_llm" in item.keywords:
                 item.add_marker(skip_real_llm)
-

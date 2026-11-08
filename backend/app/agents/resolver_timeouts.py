@@ -70,6 +70,7 @@ def _register_job(
                 id=job_id,
                 replace_existing=True,
                 args=[ticket_id, run_id],
+                misfire_grace_time=None,
             )
             logger.info(
                 f"Timer de {job_type} agendado no APScheduler",

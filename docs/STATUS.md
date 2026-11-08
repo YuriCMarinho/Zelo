@@ -37,6 +37,7 @@ Todo agente deve ler este arquivo antes de iniciar qualquer ação e atualizá-l
 | **S3-T10** Deploy do Link Testável + Seed/Reset para Avaliadores | Validação | **aprovada** | Dev 2 + Implementador / Revisor | `develop` (via PR #12) | `ce22307` | Container Docker unificado multi-stage testado (FastAPI + React SPA), endpoint POST /api/demo/reset funcional, botão e modal no frontend e docs/DEPLOY.md concluídos (166 testes backend, 11 testes frontend). |
 | **S3-T11** Roteiro, Gravação do Vídeo e Material do Pitch (Demo Day) | Validação | **não iniciada** | Dev 3 + Implementador / Revisor | `docs/s3-t11-pitch-video` | — | Depende de S2 concluída. |
 | **S3-T12** Pacote Final de Submissão e Plano B (`recorded_demo`) | Validação | **em revisão** | Dev 4 + Implementador / Revisor | `docs/s3-t12-submission-plan-b` | `606be0e` | Plano B implementado e validado; pacote e inventário preparados. Não atende ainda ao aceite final dos 5 entregáveis: faltam vídeo/pitch da S3-T11, deploy acessível e confirmação de acesso da banca ao repositório. Ver seção 5. |
+| **S4-T15** Governança de Reservas do Anfitrião, Isolamento de Canais e Chat Multi-Turn | Implementação / Validação | **aprovada** | Dev 1–2 + Implementador / Revisor | `develop` | `52c5dad` | Reserva em 2 etapas (`pending_approval` → aceite/recusa do anfitrião pelo valor `R$ X` ou motivo), isolamento de canais (`guest` vs `cleaner`) e `session_id` por navegador, agilidade de resposta do chat (0,5s–1,1s) e memória multi-turn. Validado com 215 testes backend + 58 testes frontend. |
 
 ---
 

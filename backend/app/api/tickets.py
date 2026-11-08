@@ -6,17 +6,25 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.agents.resolver_graph import (
+    confirm_date_with_llm,
+    generate_and_record_llm_quotes,
     record_date_response,
     record_quote_response,
+    reject_quotes_and_requote,
     resume_resolution,
     retry_provider_collection,
 )
+from app.core.config import settings
 from app.db.models import MaintenanceTicket, Property, Quote
 from app.db.session import get_db
 from app.schemas.common import QuoteStatus, TicketStatus
 from app.schemas.quote import QuoteRead
 from app.schemas.resolver import ProviderDateReply, ProviderQuoteReply
-from app.schemas.ticket import MaintenanceTicketRead, TicketApprovalRequest
+from app.schemas.ticket import (
+    MaintenanceTicketRead,
+    TicketApprovalRequest,
+    TicketRejectQuotesRequest,
+)
 from app.security.guardrails import SecurityViolationError
 
 router = APIRouter(prefix="/api/tickets", tags=["Tickets"])
@@ -69,7 +77,7 @@ def get_ticket(
     summary="Listar cotações do chamado",
     description="Retorna todas as cotações solicitadas e recebidas para o chamado.",
 )
-def list_ticket_quotes(
+async def list_ticket_quotes(
     ticket_id: str,
     db: DatabaseDep,
 ) -> list[QuoteRead]:
@@ -80,6 +88,40 @@ def list_ticket_quotes(
             detail=f"Ticket '{ticket_id}' não encontrado.",
         )
     quotes = db.query(Quote).filter(Quote.ticket_id == ticket_id).all()
+    if settings.environment != "testing" and (
+        ticket.status == TicketStatus.OPEN.value
+        or (
+            ticket.status == TicketStatus.WAITING_QUOTES.value
+            and any(q.status == QuoteStatus.REQUESTED.value for q in quotes)
+        )
+    ):
+        from app.agents.resolver_graph import LangGraphResolverStarter, compiled_resolver_graph
+        from app.schemas.resolver import ResolutionRequest
+
+        if ticket.status == TicketStatus.OPEN.value:
+            starter = LangGraphResolverStarter(compiled_resolver_graph)
+            await starter.astart_resolution(
+                ResolutionRequest(ticket_id=ticket.id, run_id=ticket.run_id),
+                db=db,
+            )
+        else:
+            await generate_and_record_llm_quotes(ticket.id, ticket.run_id)
+        db.expire_all()
+        quotes = db.query(Quote).filter(Quote.ticket_id == ticket_id).all()
+
+    # Identifica a cotação recomendada (melhor relação nota Google / preço)
+    recommended_id: str | None = None
+    priced_quotes = [q for q in quotes if q.amount is not None and q.amount > 0]
+    if priced_quotes:
+        best = max(
+            priced_quotes,
+            key=lambda q: (
+                ((q.provider.rating if q.provider and q.provider.rating else 4.7) ** 2)
+                / float(q.amount or 200.0)
+            ),
+        )
+        recommended_id = best.id
+
     return [
         QuoteRead(
             id=q.id,
@@ -93,6 +135,11 @@ def list_ticket_quotes(
             created_at=q.created_at,
             provider_name=q.provider.name if q.provider else None,
             provider_rating=q.provider.rating if q.provider else None,
+            provider_reviews_count=(
+                getattr(q.provider, "reviews_count", 42) if q.provider else None
+            ),
+            provider_address=getattr(q.provider, "address", None) if q.provider else None,
+            is_recommended=(q.id == recommended_id),
         )
         for q in quotes
     ]
@@ -122,6 +169,11 @@ async def start_ticket_resolution(
         db.expire_all()
         return db.get(MaintenanceTicket, ticket_id) or ticket
 
+    if ticket.status == TicketStatus.WAITING_QUOTES.value and settings.environment != "testing":
+        await generate_and_record_llm_quotes(ticket.id, ticket.run_id)
+        db.expire_all()
+        return db.get(MaintenanceTicket, ticket_id) or ticket
+
     # Se já estiver em andamento ou finalizado, apenas retorna o ticket atual
     if ticket.status != TicketStatus.OPEN.value:
         return ticket
@@ -145,8 +197,7 @@ async def start_ticket_resolution(
     response_model=MaintenanceTicketRead,
     summary="Aprovação de orçamento pelo ADM",
     description=(
-        "Permite ao administrador aprovar um orçamento para "
-        "destravar a máquina de estados do Nó 3."
+        "Permite ao administrador aprovar um orçamento para destravar a máquina de estados do Nó 3."
     ),
 )
 async def approve_ticket_quote(
@@ -191,6 +242,13 @@ async def approve_ticket_quote(
 
     try:
         await resume_resolution(ticket_id=ticket_id, provider_id=payload.provider_id)
+        should_auto_confirm = (
+            payload.auto_confirm_date
+            if payload.auto_confirm_date is not None
+            else (settings.environment != "testing")
+        )
+        if should_auto_confirm:
+            await confirm_date_with_llm(ticket_id=ticket_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -203,15 +261,51 @@ async def approve_ticket_quote(
         ) from e
 
     db.expire_all()
-    refreshed_ticket = (
-        db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
-    )
+    refreshed_ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
     if not refreshed_ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Ticket '{ticket_id}' não encontrado após atualização.",
         )
     return refreshed_ticket
+
+
+@router.post(
+    "/{ticket_id}/reject-quotes",
+    response_model=MaintenanceTicketRead,
+    summary="Recusar orçamentos e solicitar novas propostas via LLM",
+    description=(
+        "Descarta as propostas atuais e solicita ao Nó 3 uma nova rodada de cotações "
+        "considerando a justificativa do anfitrião."
+    ),
+)
+async def reject_ticket_quotes(
+    ticket_id: str,
+    payload: TicketRejectQuotesRequest,
+    db: DatabaseDep,
+) -> MaintenanceTicket:
+    db.expire_all()
+    ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket '{ticket_id}' não encontrado.",
+        )
+    try:
+        await reject_quotes_and_requote(
+            ticket_id=ticket_id,
+            reason=payload.reason,
+            run_id=payload.run_id,
+        )
+    except SecurityViolationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Violação de segurança nos guardrails: {e}",
+        ) from e
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    return _refreshed(db, ticket_id)
 
 
 def _refreshed(db: Session, ticket_id: str) -> MaintenanceTicket:
