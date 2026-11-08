@@ -931,3 +931,85 @@ def test_api_list_tickets_for_property(
 
     resp_404 = client.get("/api/properties/non-existent-prop/tickets")
     assert resp_404.status_code == 404
+
+
+def test_api_start_ticket_resolution(
+    client: TestClient,
+    db_session: Session,
+    sample_property: Property,
+    sample_providers: list[Provider],
+) -> None:
+    """Testa endpoint POST /api/tickets/{ticket_id}/start-resolution."""
+    t = MaintenanceTicket(
+        id="tick-start-res-1",
+        run_id="run-start-res-1",
+        property_id=sample_property.id,
+        reported_by_role=ReportedByRole.TENANT.value,
+        category=ProviderCategory.PLUMBER.value,
+        urgency=TicketUrgency.NORMAL.value,
+        location_in_property="Cozinha",
+        description="Vazamento torneira",
+        status=TicketStatus.OPEN.value,
+    )
+    db_session.add(t)
+    db_session.commit()
+
+    resp = client.post(f"/api/tickets/{t.id}/start-resolution")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] in (
+        TicketStatus.AWAITING_ADM_APPROVAL.value,
+        TicketStatus.WAITING_QUOTES.value,
+    )
+
+    resp_already = client.post(f"/api/tickets/{t.id}/start-resolution")
+    assert resp_already.status_code == 200
+
+    resp_404 = client.post("/api/tickets/non-existent/start-resolution")
+    assert resp_404.status_code == 404
+
+
+def test_api_costs_summary(client: TestClient) -> None:
+    """Testa endpoint GET /api/costs/summary."""
+    resp = client.get("/api/costs/summary")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_cost_usd" in data
+    assert "budget_limit_usd" in data
+    assert "percentage_used" in data
+
+
+def test_api_audit_events(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    """Testa endpoint GET /api/audit."""
+    from app.db.models.audit import AuditEvent
+
+    ev = AuditEvent(
+        run_id="run-audit-test-1",
+        ticket_id="tick-audit-test-1",
+        node="router",
+        event_type="message_received",
+        payload={"msg": "teste"},
+    )
+    db_session.add(ev)
+    db_session.commit()
+
+    resp = client.get("/api/audit")
+    assert resp.status_code == 200
+    events = resp.json()
+    assert len(events) >= 1
+
+    resp_ticket = client.get("/api/audit?ticket_id=tick-audit-test-1")
+    assert resp_ticket.status_code == 200
+    assert len(resp_ticket.json()) >= 1
+
+    resp_run = client.get("/api/audit?run_id=run-audit-test-1")
+    assert resp_run.status_code == 200
+    assert len(resp_run.json()) >= 1
+
+    resp_node = client.get("/api/audit?node=router")
+    assert resp_node.status_code == 200
+    assert len(resp_node.json()) >= 1
+

@@ -7,7 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api import chat_router, property_tickets_router, providers_router, tickets_router
+from app.api import (
+    audit_router,
+    chat_router,
+    costs_router,
+    property_tickets_router,
+    providers_router,
+    tickets_router,
+)
 from app.core.config import settings
 from app.db.base import Base
 from app.db.models import MaintenanceTicket, Property
@@ -55,6 +62,8 @@ app.include_router(providers_router)
 app.include_router(chat_router, prefix="/api")
 app.include_router(tickets_router)
 app.include_router(property_tickets_router)
+app.include_router(costs_router)
+app.include_router(audit_router)
 
 
 @app.get("/health", tags=["Saúde"])

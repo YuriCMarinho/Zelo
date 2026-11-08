@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.agents.resolver_graph import resume_resolution
 from app.db.models import MaintenanceTicket, Property, Quote
 from app.db.session import get_db
-from app.schemas.common import TicketStatus
+from app.schemas.common import QuoteStatus, TicketStatus
 from app.schemas.quote import QuoteRead
 from app.schemas.ticket import MaintenanceTicketRead, TicketApprovalRequest
 
@@ -65,14 +65,67 @@ def get_ticket(
 def list_ticket_quotes(
     ticket_id: str,
     db: DatabaseDep,
-) -> list[Quote]:
+) -> list[QuoteRead]:
     ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Ticket '{ticket_id}' não encontrado.",
         )
-    return db.query(Quote).filter(Quote.ticket_id == ticket_id).all()
+    quotes = db.query(Quote).filter(Quote.ticket_id == ticket_id).all()
+    return [
+        QuoteRead(
+            id=q.id,
+            ticket_id=q.ticket_id,
+            run_id=q.run_id,
+            provider_id=q.provider_id,
+            amount=q.amount,
+            description=q.description,
+            proposed_availability=q.proposed_availability,
+            status=QuoteStatus(q.status),
+            created_at=q.created_at,
+            provider_name=q.provider.name if q.provider else None,
+            provider_rating=q.provider.rating if q.provider else None,
+        )
+        for q in quotes
+    ]
+
+
+@router.post(
+    "/{ticket_id}/start-resolution",
+    response_model=MaintenanceTicketRead,
+    summary="Iniciar resolução do chamado (Nó 3)",
+    description="Dispara a coleta de orçamentos e síntese do Nó 3 para o chamado.",
+)
+async def start_ticket_resolution(
+    ticket_id: str,
+    db: DatabaseDep,
+) -> MaintenanceTicket:
+    db.expire_all()
+    ticket = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ticket '{ticket_id}' não encontrado.",
+        )
+
+    # Se já estiver aguardando aprovação ou posterior, apenas retorna o ticket atual
+    if ticket.status not in (TicketStatus.OPEN.value, TicketStatus.NO_PROVIDERS_FALLBACK.value):
+        return ticket
+
+    from app.agents.resolver_graph import LangGraphResolverStarter, compiled_resolver_graph
+    from app.schemas.resolver import ResolutionRequest
+
+    starter = LangGraphResolverStarter(compiled_resolver_graph)
+    req = ResolutionRequest(
+        ticket_id=ticket.id,
+        property_id=ticket.property_id,
+        run_id=ticket.run_id,
+    )
+    await starter.astart_resolution(req, db=db)
+    db.expire_all()
+    refreshed = db.query(MaintenanceTicket).filter(MaintenanceTicket.id == ticket_id).first()
+    return refreshed or ticket
 
 
 @router.post(

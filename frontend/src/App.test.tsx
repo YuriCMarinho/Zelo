@@ -43,4 +43,57 @@ describe('navegação por imóvel', () => {
     await user.click(screen.getByRole('link', { name: 'Chat do imóvel' }))
     expect(screen.queryByText('Mensagem da Aurora')).not.toBeInTheDocument()
   })
+
+  it('permite ao anfitrião aprovar um orçamento na sessão ADM e avançar para agendamento', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
+    await user.click(screen.getByRole('link', { name: 'Agente ⇄ Anfitrião' }))
+
+    // Verifica que a síntese de orçamentos e cartões estão visíveis
+    expect(screen.getByText(/Pedimos orçamento/)).toBeInTheDocument()
+    expect(screen.getByText('Carlos Eletricista')).toBeInTheDocument()
+    expect(screen.getByText('Volt Reparos')).toBeInTheDocument()
+
+    // Botão inicial de aprovação para Carlos
+    const approveBtn = screen.getByRole('button', { name: /Aprovar Carlos/ })
+    expect(approveBtn).toBeInTheDocument()
+
+    // Clica no cartão da Volt Reparos e vê o botão mudar
+    await user.click(screen.getByText('Volt Reparos'))
+    expect(screen.getByRole('button', { name: /Aprovar Volt Reparos/ })).toBeInTheDocument()
+
+    // Aprova o orçamento
+    await user.click(screen.getByRole('button', { name: /Aprovar Volt Reparos/ }))
+    expect(await screen.findByText(/Orçamento aprovado e agendamento confirmado/)).toBeInTheDocument()
+
+    // Volta ao chat e verifica o banner de visita marcada
+    await user.click(screen.getByRole('link', { name: 'Chat do imóvel' }))
+    expect(await screen.findByText(/Visita marcada/)).toBeInTheDocument()
+  })
+
+  it('navega para o painel de auditoria & custos pela barra de navegação', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('link', { name: 'Painel do anfitrião & Custos' }))
+    expect(screen.getByRole('heading', { name: 'Consumo do Orçamento Featherless' })).toBeInTheDocument()
+    expect(screen.getByText(/Teto global: US\$/)).toBeInTheDocument()
+  })
+
+  it('exibe a máquina de estados com os 5 passos do Fluxo C', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('link', { name: /Casa Aurora/ }))
+    await user.click(screen.getByRole('link', { name: 'Chat do imóvel' }))
+
+    expect(screen.getByText(/1\. Coleta de Orçamentos/)).toBeInTheDocument()
+    expect(screen.getByText(/2\. Decisão do Anfitrião/)).toBeInTheDocument()
+    expect(screen.getByText(/3\. Regra Urgência × Agenda/)).toBeInTheDocument()
+    expect(screen.getByText(/4\. Confirmação do Prestador/)).toBeInTheDocument()
+    expect(screen.getByText(/5\. Aviso ao Hóspede e Conclusão/)).toBeInTheDocument()
+
+    // Simulador de cenários presente
+    expect(screen.getByText('Simulador de Cenários dos Agentes')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Relato de Manutenção/ })).toBeInTheDocument()
+  })
 })
