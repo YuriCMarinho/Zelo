@@ -9,6 +9,7 @@ Cobre:
 5. Endpoints HTTP da API de Tickets (/api/tickets e /api/properties/{id}/tickets).
 """
 
+import asyncio
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -679,6 +680,42 @@ async def test_langgraph_no_providers_fallback_resumes_when_node_s_finds_one(
     await spawned[0]
     db_session.refresh(ticket)
     assert ticket.status == TicketStatus.WAITING_QUOTES.value
+
+
+@pytest.mark.asyncio
+async def test_fast_provider_collection_starts_after_graph_is_waiting(
+    db_session: Session,
+    sample_property: Property,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Uma coleta imediata não pode perder o evento que libera os pedidos de orçamento."""
+    tasks: list[asyncio.Task[Any]] = []
+    monkeypatch.setattr(
+        resolver_graph, "_spawn", lambda coro: tasks.append(asyncio.create_task(coro))
+    )
+    ticket = _ticket(
+        db_session, sample_property, "tick-fast-collection", category=ProviderCategory.PAINTER
+    )
+
+    async def collect_immediately(db: Session, category: ProviderCategory, region: str) -> None:
+        snapshot = await compiled_resolver_graph.aget_state(resolver_graph._thread(ticket.id))
+        assert "wait_for_providers" in snapshot.next
+        db.add(Provider(
+            id="prov-fast", name="Pintor confirmado", category=category.value,
+            region=region, phone="+55 21 98888-0000", is_validated=True,
+        ))
+        db.commit()
+
+    monkeypatch.setattr(resolver_graph, "collect_on_demand", collect_immediately)
+    await _start(ticket, db_session)
+    assert len(tasks) == 1
+    await asyncio.gather(*tasks)
+    db_session.refresh(ticket)
+    assert ticket.status == TicketStatus.WAITING_QUOTES.value
+    quote = db_session.query(Quote).filter(Quote.ticket_id == ticket.id).one()
+    assert quote.provider_id == "prov-fast"
+    assert quote.status == QuoteStatus.REQUESTED.value
+    assert quote.amount is None
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { ManagementPage } from './management'
+import { properties } from './demo-data'
+import type { MaintenanceTicket } from './contracts'
 
 beforeEach(() => { localStorage.clear(); window.history.replaceState(null, '', '/') })
-afterEach(() => { cleanup(); localStorage.clear(); window.history.replaceState(null, '', '/') })
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); window.history.replaceState(null, '', '/') })
 const nextYear = new Date().getFullYear() + 1
 
 describe('telas de gestão', () => {
@@ -75,5 +78,62 @@ describe('telas de gestão', () => {
     await user.click(screen.getByRole('button', { name: 'Desfazer alterações' }))
     expect(screen.getByLabelText('Nome')).toHaveValue('Yuri')
     expect(screen.getByLabelText('E-mail')).toHaveValue('yuri@example.com')
+  })
+})
+
+const chatTicket: MaintenanceTicket = {
+  id: 'ticket-chat-1', run_id: 'run-chat-1', property_id: 'prop-real-1',
+  reported_by_role: 'tenant', category: 'plumber', urgency: 'urgent',
+  location_in_property: 'Cozinha', description: 'Torneira da cozinha vazando',
+  status: 'awaiting_adm_approval', notify_tenant: true, created_at: '2026-11-08T07:00:00Z',
+}
+const realProperties = [{ ...properties[0]!, id: chatTicket.property_id, title: 'Imóvel do chat' }, properties[1]!]
+
+describe('chamados do chat na gestão de manutenção', () => {
+  it('carrega chamados reais, filtra por imóvel e status e abre o atendimento', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockResolvedValue(Response.json([chatTicket]))
+    vi.stubGlobal('fetch', fetchMock)
+    const navigate = vi.fn()
+    render(<ManagementPage view="manutencao" navigate={navigate} propertiesList={realProperties} />)
+    const card = (await screen.findByRole('heading', { name: chatTicket.description })).closest('article')!
+    expect(fetchMock).toHaveBeenCalledWith('/api/tickets')
+    expect(within(card).getByText('Imóvel do chat')).toBeInTheDocument()
+    expect(within(card).getByText('Aguardando sua aprovação')).toBeInTheDocument()
+    expect(within(card).queryByRole('button', { name: 'Marcar como concluído' })).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Status'), '0')
+    expect(screen.queryByRole('heading', { name: chatTicket.description })).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Status'), '1')
+    await user.selectOptions(screen.getByLabelText('Imóvel'), properties[1]!.id)
+    expect(screen.queryByRole('heading', { name: chatTicket.description })).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Imóvel'), chatTicket.property_id)
+    await user.click(screen.getByRole('link', { name: 'Acompanhar atendimento' }))
+    expect(navigate).toHaveBeenCalledWith(`/imoveis/${chatTicket.property_id}?aba=adm`)
+    expect(localStorage.getItem('zelo-tickets-v1')).toBeNull()
+  })
+
+  it('atualiza o status real quando a janela volta ao foco', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json([chatTicket]))
+      .mockResolvedValue(Response.json([{ ...chatTicket, status: 'resolved' }]))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<ManagementPage view="manutencao" navigate={vi.fn()} propertiesList={realProperties} />)
+    await screen.findByText('Aguardando sua aprovação')
+    fireEvent(window, new Event('focus'))
+    expect(await screen.findByText('Concluído', { selector: 'p' })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('mostra falha de carregamento e permite tentar novamente', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response('', { status: 503 }))
+      .mockResolvedValue(Response.json([chatTicket])))
+    render(<ManagementPage view="manutencao" navigate={vi.fn()} propertiesList={realProperties} />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível atualizar')
+    expect(screen.queryByText('Nenhum chamado por aqui')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Atualizar chamados' }))
+    expect(await screen.findByRole('heading', { name: chatTicket.description })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

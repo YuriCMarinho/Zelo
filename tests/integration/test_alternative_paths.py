@@ -186,12 +186,15 @@ def test_alt_path_1_via_http_chat(
     client: TestClient,
     db_session: Session,
     alt_property: Property,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Caminho 1 via API HTTP:
 
     POST /api/chat para categoria sem prestadores (ex: encanador) resulta em chamado
     aberto e imediatamente colocado com status NO_PROVIDERS_FALLBACK pelo Nó 3.
     """
+    # Mantém a coleta pendente para verificar a etapa de fallback via HTTP.
+    monkeypatch.setattr("app.agents.resolver_graph._spawn", lambda coro: coro.close())
     chat_payload = {
         "property_id": alt_property.id,
         "message": "O cano da pia da cozinha está quebrado e vazando água no chão.",

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ChatMessage, Occupancy, Property, PropertyTab } from './contracts'
+import type { ChatMessage, MaintenanceTicket, Occupancy, Property, PropertyTab } from './contracts'
 import { initialMessages, properties } from './demo-data'
 import { PropertyWorkspace } from './components/PropertyWorkspace'
 import { AuditPanel } from './components/AuditPanel'
 import { AgentGraphView } from './components/AgentGraphView'
-import { fetchProperties, resetDemoData } from './api/client'
+import { fetchProperties, fetchTickets, resetDemoData } from './api/client'
+import { maintenanceOccupancy } from './maintenance-calendar'
 import { ManagementPage } from './management'
 import { withLocalReservations } from './reservations'
 import { parseRoute, propertyUrl, type Route } from './routes'
@@ -205,7 +206,12 @@ function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
   const monthLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(monthDate)
   const statusForDay = (day: number) => {
     const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return occupancy.find((item) => date >= item.startDate && date <= item.endDate)
+    const entries = occupancy.filter((item) => date >= item.startDate && date <= item.endDate)
+    if (!entries.length) return undefined
+    return {
+      status: entries.some((item) => item.status === 'maintenance') ? 'maintenance' : 'reserved',
+      label: entries.map((item) => item.label).join(' · '),
+    }
   }
   return <section className="calendar-card" aria-label="Calendário de ocupação"><div className="calendar-header"><div><span className="eyebrow">AGENDA DO IMÓVEL</span><h3>Calendário de ocupação</h3></div><div className="calendar-controls"><button aria-label="Mês anterior" onClick={() => setOffset(offset - 1)}>‹</button><strong>{monthLabel}</strong><button aria-label="Próximo mês" onClick={() => setOffset(offset + 1)}>›</button></div></div>
     <div className="calendar-grid" role="grid" aria-label={monthLabel}>{['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((name) => <span key={name} className="calendar-weekday" role="columnheader">{name}</span>)}{days.map((day, index) => { const status = day ? statusForDay(day) : undefined; return <span role="gridcell" key={index} className={`calendar-day ${status ? `day-${status.status}` : ''} ${day === new Date().getDate() && offset === 0 ? 'day-today' : ''}`} aria-label={day ? `${day} de ${monthLabel}${status ? `, ${status.label}` : ', disponível'}` : undefined} title={status?.label}>{day}</span> })}</div>
@@ -214,6 +220,23 @@ function Calendar({ occupancy }: { occupancy: readonly Occupancy[] }) {
 }
 
 function Overview({ property, navigate }: { property: Property; navigate: (url: string) => void }) {
+  const [tickets, setTickets] = useState<MaintenanceTicket[]>([])
+  const [calendarError, setCalendarError] = useState('')
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      fetchTickets(property.id).then((items) => {
+        if (active) { setTickets(items); setCalendarError('') }
+      }).catch(() => {
+        if (active) setCalendarError('Não foi possível atualizar as visitas de manutenção no calendário.')
+      })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 15000)
+    window.addEventListener('focus', refresh)
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [property.id])
+  const occupancy = [...property.occupancy, ...maintenanceOccupancy(tickets, property.id)]
   return (
     <div className="overview-grid">
       <div>
@@ -254,7 +277,8 @@ function Overview({ property, navigate }: { property: Property; navigate: (url: 
             Abrir chat do imóvel →
           </button>
         </div>
-        <Calendar occupancy={property.occupancy} />
+        <Calendar occupancy={occupancy} />
+        {calendarError && <p role="alert" className="form-error">{calendarError}</p>}
       </aside>
     </div>
   )
@@ -480,7 +504,7 @@ export default function App() {
           sendMessage={(message) => setMessages((previous) => [...previous, message])}
         />
       ) : route.view === 'reservas' || route.view === 'manutencao' || route.view === 'configuracoes' ? (
-        <ManagementPage key={route.view} view={route.view} navigate={navigate} />
+        <ManagementPage key={route.view} view={route.view} navigate={navigate} propertiesList={propertiesList} />
       ) : (
         <Listing navigate={navigate} propertiesList={propertiesList} />
       )}
