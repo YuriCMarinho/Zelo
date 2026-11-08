@@ -59,6 +59,24 @@ export interface MaintenanceTicket {
   updated_at?: string | null
 }
 
+export function formatFriendlyDate(val: string | null | undefined): string {
+  if (!val) return ''
+  if (typeof val === 'string' && val.includes('-') && (val.includes('T') || val.includes(' '))) {
+    const d = new Date(val)
+    if (!isNaN(d.getTime())) {
+      const weekdays = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+      const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+      const day = String(d.getUTCDate()).padStart(2, '0')
+      const month = months[d.getUTCMonth()]
+      const weekday = weekdays[d.getUTCDay()]
+      const hours = String(d.getUTCHours()).padStart(2, '0')
+      const mins = String(d.getUTCMinutes()).padStart(2, '0')
+      return `${weekday}, ${day} de ${month} às ${hours}:${mins}`
+    }
+  }
+  return val
+}
+
 export interface Quote {
   id: string
   ticket_id: string

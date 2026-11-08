@@ -50,19 +50,17 @@ describe('AgentGraphView Component', () => {
     expect(screen.getByText('run-demo-001')).toBeInTheDocument()
   })
 
-  it('permite expandir e recolher o guia de observabilidade Langfuse', async () => {
-    const user = userEvent.setup()
+  it('renderiza o filtro de casas dentro do card e não exibe elementos ruidosos removidos', () => {
     render(<AgentGraphView navigate={() => {}} propertiesList={[...properties]} />)
 
-    const toggleBtn = screen.getByRole('button', { name: /Como funciona a Observabilidade/ })
-    expect(toggleBtn).toBeInTheDocument()
+    // O botão de guia explicativo e a dica solta foram removidos por feedback de design
+    expect(screen.queryByRole('button', { name: /Como funciona a Observabilidade/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Clique em qualquer bolinha para inspecionar')).not.toBeInTheDocument()
     expect(screen.queryByText('1. Traces & Spans')).not.toBeInTheDocument()
 
-    await user.click(toggleBtn)
-    expect(screen.getByText('1. Traces & Spans')).toBeInTheDocument()
-
-    await user.click(toggleBtn)
-    expect(screen.queryByText('1. Traces & Spans')).not.toBeInTheDocument()
+    // O filtro de nós por imóvel está no toolbar interno do card
+    const cardToolbar = screen.getByRole('radiogroup', { name: 'Filtrar nós por imóvel' })
+    expect(cardToolbar).toBeInTheDocument()
   })
 })
 

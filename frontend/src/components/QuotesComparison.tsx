@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
-import { fetchAuditEvents } from '../api/client'
-import type { AuditEvent, MaintenanceTicket, Property, Quote } from '../contracts'
+import { useState } from 'react'
+import { formatFriendlyDate, type MaintenanceTicket, type Property, type Quote } from '../contracts'
 
 const money = (val: number | null | undefined) =>
   val != null
@@ -32,26 +31,6 @@ export function QuotesComparison({
   })
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
-
-  useEffect(() => {
-    let ignore = false
-    if (!ticket?.id) return
-
-    fetchAuditEvents(ticket.id)
-      .then((evs) => {
-        if (!ignore) {
-          setAuditEvents(evs)
-        }
-      })
-      .catch(() => {
-        // Ignora erro em modo demo/mock
-      })
-
-    return () => {
-      ignore = true
-    }
-  }, [ticket?.id, ticket?.status])
 
   const selectedQuote = quotes.find((q) => q.provider_id === selectedProviderId) || quotes[0]
 
@@ -68,7 +47,9 @@ export function QuotesComparison({
         return 'Confirmando com prestador'
       case 'confirmed_schedule':
       case 'resolved':
-        return ticket.scheduled_date ? `Agendado · ${ticket.scheduled_date}` : 'Concluído'
+        return ticket.scheduled_date
+          ? `Agendado · ${formatFriendlyDate(ticket.scheduled_date)}`
+          : 'Concluído'
       default:
         return 'Em análise'
     }
@@ -76,6 +57,21 @@ export function QuotesComparison({
 
   const isAwaitingApproval = ticket?.status === 'awaiting_adm_approval'
   const isResolved = ticket?.status === 'resolved' || ticket?.status === 'confirmed_schedule'
+
+  const synthesisText = (() => {
+    if (isResolved) {
+      return 'Orçamento aprovado pelo anfitrião. A visita técnica foi agendada e o prestador homologado já foi acionado para o atendimento no imóvel. O hóspede foi comunicado.'
+    }
+    if (
+      ticket?.adm_synthesis &&
+      !ticket.adm_synthesis.includes('determinística') &&
+      !ticket.adm_synthesis.includes('resolver_adm_summary') &&
+      !ticket.adm_synthesis.includes('nó')
+    ) {
+      return ticket.adm_synthesis
+    }
+    return 'Pedimos orçamento aos prestadores homologados da região. Analise as opções e aprove a melhor alternativa. O hóspede já foi acolhido.'
+  })()
 
   async function handleApprove() {
     if (!selectedQuote || submitting) return
@@ -93,7 +89,7 @@ export function QuotesComparison({
 
   return (
     <div className="adm-container" aria-label="Sessão Agente e Anfitrião: Comparativo de orçamentos">
-      {/* Header do Mockup Orcamentos.dc.html */}
+      {/* Header com identificação e status amigável */}
       <div className="adm-header-block">
         <div className="adm-top-row">
           {onBack && (
@@ -132,82 +128,62 @@ export function QuotesComparison({
           <h1>{ticket?.description || 'Nenhum chamado de manutenção em aberto'}</h1>
         </div>
 
-        {ticket?.adm_synthesis ? (
-          <p className="adm-synthesis-box">{ticket.adm_synthesis}</p>
-        ) : isAwaitingApproval ? (
-          <p className="adm-synthesis-box">
-            Pedimos orçamento aos prestadores homologados da região. Analise as opções e aprove a melhor
-            alternativa. O hóspede já foi acolhido.
-          </p>
-        ) : null}
+        {synthesisText && (
+          <div className="adm-synthesis-box">
+            <p style={{ margin: 0 }}>{synthesisText}</p>
+          </div>
+        )}
       </div>
 
-      {/* Trilha de Auditoria exibida somente quando houver eventos registrados */}
-      {ticket && auditEvents.length > 0 && (
-        <section
+      {/* Banner de Confirmação quando já agendado */}
+      {isResolved && (
+        <div
           style={{
-            margin: '0 0 20px',
+            margin: '20px 20px 0',
             padding: '16px 20px',
-            background: 'var(--areia)',
+            background: 'var(--mar-08)',
             borderRadius: '16px',
-            border: '1px solid var(--mar-08)',
+            display: 'flex',
+            gap: '14px',
+            alignItems: 'center',
           }}
-          aria-label="Trilha de auditoria dos agentes"
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px' }}>
-              Como os agentes processaram este chamado
-            </h3>
-            <span className="tabular-nums" style={{ fontSize: '12px', color: 'var(--mar-72)', fontWeight: 600 }}>
-              {auditEvents.length} etapa(s) registrada(s)
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'var(--mar-profundo)',
+              color: '#fff',
+              display: 'grid',
+              placeItems: 'center',
+              fontWeight: 800,
+              fontSize: '16px',
+              flexShrink: 0,
+            }}
+          >
+            ✓
+          </div>
+          <div>
+            <strong style={{ display: 'block', fontSize: '15px', color: 'var(--mar-profundo)' }}>
+              Visita técnica agendada com sucesso!
+            </strong>
+            <span style={{ fontSize: '13px', color: 'var(--mar-72)' }}>
+              Prestador: <strong>{selectedQuote?.provider_name || 'Prestador Homologado'}</strong> ·{' '}
+              {ticket?.scheduled_date && (
+                <span>Visita em <strong>{formatFriendlyDate(ticket.scheduled_date)}</strong></span>
+              )}
             </span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {auditEvents.slice(0, 6).map((ev) => (
-              <div
-                key={ev.id}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  padding: '8px 12px',
-                  background: 'rgba(255, 255, 255, 0.85)',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
-                      {ev.node}
-                    </span>
-                    <strong>{ev.event_type}</strong>
-                  </div>
-                  <time className="tabular-nums" style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
-                    {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
-                  </time>
-                </div>
-                {ev.payload && Object.keys(ev.payload).length > 0 && (
-                  <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
-                    {Object.entries(ev.payload)
-                      .slice(0, 3)
-                      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-                      .join(' · ')}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+        </div>
       )}
 
-      {/* Lista de Cotações Recebidas */}
+      {/* Comparativo de Orçamentos Recebidos */}
       <div className="adm-quotes-list" role="radiogroup" aria-label="Opções de orçamento">
         {quotes.length === 0 ? (
           <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--mar-72)', fontSize: '14px' }}>
             {ticket?.status === 'waiting_quotes'
-              ? 'Aguardando retorno dos prestadores homologados...'
+              ? 'Buscando orçamentos com os prestadores homologados...'
               : 'Nenhum orçamento disponível no momento.'}
           </div>
         ) : (
@@ -236,7 +212,7 @@ export function QuotesComparison({
                   <div>
                     <h3 className="quote-provider-name">{name}</h3>
                     <span className="quote-provider-meta tabular-nums">
-                      ★ {rating} · Prestador validado{quote.is_recommended ? ' · Melhor relação janela × preço' : ''}
+                      ★ {rating} · Prestador homologado{quote.is_recommended ? ' · Melhor janela × custo' : ''}
                     </span>
                   </div>
                   <span className="quote-price tabular-nums">{money(quote.amount)}</span>
@@ -244,9 +220,16 @@ export function QuotesComparison({
 
                 <div className="quote-chips">
                   {quote.proposed_availability && (
-                    <span className="quote-chip">{quote.proposed_availability}</span>
+                    <span className="quote-chip">
+                      Disponibilidade: {formatFriendlyDate(quote.proposed_availability)}
+                    </span>
                   )}
                   {quote.description && <span className="quote-chip">{quote.description}</span>}
+                  {isSelected && isResolved && (
+                    <span className="quote-chip" style={{ background: 'var(--mar-profundo)', color: '#fff' }}>
+                      ✓ Escolhido pelo anfitrião
+                    </span>
+                  )}
                 </div>
               </div>
             )
@@ -254,7 +237,7 @@ export function QuotesComparison({
         )}
       </div>
 
-      {/* Rodapé e CTA de Aprovação */}
+      {/* Rodapé com CTA de Aprovação Clara */}
       <div className="adm-footer">
         {errorMsg && (
           <div
@@ -278,7 +261,7 @@ export function QuotesComparison({
             onClick={handleApprove}
           >
             {submitting ? (
-              'Destravando máquina de estados...'
+              'Confirmando aprovação...'
             ) : selectedQuote ? (
               `Aprovar ${selectedQuote.provider_name || 'prestador'} · ${money(selectedQuote.amount)}`
             ) : (
@@ -294,6 +277,7 @@ export function QuotesComparison({
               textAlign: 'center',
               fontSize: '14px',
               fontWeight: 600,
+              color: 'var(--mar-profundo)',
             }}
           >
             ✓ Orçamento aprovado e agendamento confirmado!
@@ -301,7 +285,7 @@ export function QuotesComparison({
         ) : null}
 
         <span className="adm-guarantee-note">
-          A Zelo agenda e avisa o hóspede. Nada é contratado sem você.
+          A Zelo agenda e avisa o hóspede. Nada é contratado sem sua aprovação prévia.
         </span>
       </div>
     </div>

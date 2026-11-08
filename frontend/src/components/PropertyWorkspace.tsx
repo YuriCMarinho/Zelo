@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { approveQuote, fetchQuotes, fetchTicketsForProperty } from '../api/client'
+import { formatFriendlyDate, type ChatMessage, type MaintenanceTicket, type Property, type PropertyTab, type Quote } from '../contracts'
+import { propertyUrl } from '../routes'
 import { ChatPanel } from './ChatPanel'
 import { ProviderSimulator } from './ProviderSimulator'
 import { QuotesComparison } from './QuotesComparison'
 import { StateTimeline } from './StateTimeline'
-import type { ChatMessage, MaintenanceTicket, Property, PropertyTab, Quote } from '../contracts'
 
 export function PropertyWorkspace({
   property,
@@ -143,67 +144,218 @@ export function PropertyWorkspace({
       propertyId: property.id,
       channel: 'guest',
       sender: 'agent',
-      body: `Perfeito! O anfitrião aprovou o orçamento e agendamos a visita para ${dateStr}. Estaremos acompanhando!`,
+      body: `Perfeito! O anfitrião aprovou o orçamento e agendamos a visita para ${formatFriendlyDate(dateStr)}. Estaremos acompanhando!`,
       time: new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date()),
       scheduledDate: dateStr,
     })
   }
 
+  const wifiSsid = property.id === 'prop-portodigital-04' ? 'PortoDigital_Tech' : 'Zelo_Hospedes'
+  const isPortoDigital = property.id === 'prop-portodigital-04'
+
   return (
-      <div className="tab-content">
+    <div className="tab-content">
+      {tab === 'chat' && (
+        <div className="split-layout">
+          <ChatPanel
+            property={property}
+            messages={messages}
+            onNewMessage={onNewMessage}
+            onTicketCreated={() => loadTicketData()}
+            scheduledVisit={scheduledDate ? formatFriendlyDate(scheduledDate) : null}
+          />
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* 1. Guia rápido do imóvel com informações essenciais da estadia */}
+            <div className="property-guide-card">
+              <div className="property-guide-header">
+                <img src={property.image} alt={property.title} className="property-guide-thumb" />
+                <div>
+                  <h3>{property.title}</h3>
+                  <p>{property.neighborhood} · {property.location.split(',')[1]?.trim() || 'Brasil'}</p>
+                </div>
+              </div>
 
-        {tab === 'chat' && (
-          <div className="split-layout">
-            <ChatPanel
-              property={property}
-              messages={messages}
-              onNewMessage={onNewMessage}
-              onTicketCreated={() => loadTicketData()}
-              scheduledVisit={scheduledDate}
-            />
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <ProviderSimulator
-                property={property}
-                currentTicketId={ticket?.id}
-                ticketStatus={ticket?.status}
-                onTicketUpdated={loadTicketData}
-              />
-              <StateTimeline
-                status={ticket?.status || 'open'}
-                scheduledDate={scheduledDate}
-                notifyTenant={ticket?.notify_tenant}
-              />
-            </aside>
-          </div>
-        )}
+              <div className="guide-items">
+                <div className="guide-item">
+                  <span className="guide-icon">📶</span>
+                  <div>
+                    <strong>Wi-Fi da acomodação</strong>
+                    <p>Rede: <code>{wifiSsid}</code> · Senha: <code>zelo@2026</code></p>
+                  </div>
+                </div>
+                <div className="guide-item">
+                  <span className="guide-icon">🔑</span>
+                  <div>
+                    <strong>Acesso inteligente</strong>
+                    <p>{isPortoDigital ? 'Fechadura digital com senha 24h' : 'Check-in flexível com anfitrião'}</p>
+                  </div>
+                </div>
+                <div className="guide-item">
+                  <span className="guide-icon">🕒</span>
+                  <div>
+                    <strong>Horários</strong>
+                    <p>Check-in a partir das 14h · Check-out até 11h</p>
+                  </div>
+                </div>
+              </div>
 
-        {tab === 'adm' && (
-          <div className="split-layout">
-            <QuotesComparison
-              property={property}
-              ticket={ticket}
-              quotes={quotes}
-              onApprove={handleApprove}
-              isLoading={loadingQuotes}
-            />
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--mar-72)', lineHeight: 1.5 }}>
+              <div className="guide-footer-tip">
+                <span>✦</span>
+                <small>
+                  Dúvidas comuns são respondidas pela IA no chat. Problemas no espaço geram chamados para o anfitrião aprovar.
+                </small>
+              </div>
+            </div>
+
+            {/* 2. Chamado Ativo do Imóvel (se houver) */}
+            {ticket && (
+              <div className="active-ticket-mini-card">
+                <div className="ticket-mini-top">
+                  <span
+                    className={`status-pill ${
+                      ticket.status === 'awaiting_adm_approval'
+                        ? 'awaiting'
+                        : ticket.status === 'resolved' || ticket.status === 'confirmed_schedule'
+                        ? 'resolved'
+                        : 'neutral'
+                    }`}
+                  >
+                    {ticket.status === 'awaiting_adm_approval'
+                      ? 'Aguardando sua decisão'
+                      : ticket.status === 'resolved' || ticket.status === 'confirmed_schedule'
+                      ? 'Visita agendada'
+                      : 'Em andamento'}
+                  </span>
+                  <span className="ticket-loc">{ticket.location_in_property || 'Geral'}</span>
+                </div>
+                <h4>{ticket.description}</h4>
+                {ticket.scheduled_date && (
+                  <p className="ticket-date">
+                    🗓️ Visita: <strong>{formatFriendlyDate(ticket.scheduled_date)}</strong>
+                  </p>
+                )}
+                <div style={{ marginTop: '10px' }}>
+                  <a
+                    href={propertyUrl(property.id, 'adm')}
+                    className="shortcut-btn primary"
+                    style={{ fontSize: '12px', padding: '8px 12px', display: 'inline-block' }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      window.history.pushState(null, '', propertyUrl(property.id, 'adm'))
+                      window.dispatchEvent(new PopStateEvent('popstate'))
+                    }}
+                  >
+                    Ver detalhes em Agente ⇄ Anfitrião →
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* 3. Ferramentas de Teste e Simulação em accordion recolhível */}
+            <details className="dev-tools-accordion">
+              <summary>🛠️ Simulação e Máquina de Estados (Avaliadores)</summary>
+              <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <ProviderSimulator
+                  property={property}
+                  currentTicketId={ticket?.id}
+                  ticketStatus={ticket?.status}
+                  onTicketUpdated={loadTicketData}
+                />
+                <StateTimeline
+                  status={ticket?.status || 'open'}
+                  scheduledDate={scheduledDate}
+                  notifyTenant={ticket?.notify_tenant}
+                />
+              </div>
+            </details>
+          </aside>
+        </div>
+      )}
+
+      {tab === 'adm' && (
+        <div className="split-layout">
+          <QuotesComparison
+            property={property}
+            ticket={ticket}
+            quotes={quotes}
+            onApprove={handleApprove}
+            isLoading={loadingQuotes}
+          />
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* 1. Painel de Controle e Garantias do Anfitrião */}
+            <div className="adm-control-card">
+              <span className="eyebrow">ÁREA DO ANFITRIÃO</span>
+              <h3 style={{ margin: '4px 0 10px', fontSize: '18px' }}>Decisões com você</h3>
+              <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--mar-72)', lineHeight: 1.5 }}>
                 Somente as decisões deste imóvel aparecem aqui. O agente reúne orçamentos e aguarda sua escolha explícita.
               </p>
-              <StateTimeline
-                status={ticket?.status || 'awaiting_adm_approval'}
-                scheduledDate={scheduledDate}
-                notifyTenant={ticket?.notify_tenant}
-              />
-              <ProviderSimulator
-                property={property}
-                currentTicketId={ticket?.id}
-                ticketStatus={ticket?.status}
-                onTicketUpdated={loadTicketData}
-              />
-            </aside>
-          </div>
-        )}
-      </div>
+
+              <div className="adm-guarantees-list">
+                <div className="guarantee-item">
+                  <span className="guarantee-icon">🛡️</span>
+                  <div>
+                    <strong>Você tem o controle</strong>
+                    <p>Nenhum prestador é contratado sem seu clique e aprovação prévia.</p>
+                  </div>
+                </div>
+                <div className="guarantee-item">
+                  <span className="guarantee-icon">⭐</span>
+                  <div>
+                    <strong>Prestadores homologados</strong>
+                    <p>Profissionais validados na região com avaliação média comprovada.</p>
+                  </div>
+                </div>
+                <div className="guarantee-item">
+                  <span className="guarantee-icon">🗓️</span>
+                  <div>
+                    <strong>Proteção de estadias</strong>
+                    <p>A janela da visita é calculada para não coincidir com a rotina de hóspedes.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--mar-16)' }}>
+                <a
+                  href="/agentes"
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: 'var(--mar-profundo)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    window.history.pushState(null, '', '/agentes')
+                    window.dispatchEvent(new PopStateEvent('popstate'))
+                  }}
+                >
+                  Ver fluxo no Grafo de Agentes →
+                </a>
+              </div>
+            </div>
+
+            {/* 2. Ferramentas de Teste e Simulação em accordion recolhível */}
+            <details className="dev-tools-accordion">
+              <summary>🛠️ Simular Respostas de Prestadores (Demo)</summary>
+              <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <ProviderSimulator
+                  property={property}
+                  currentTicketId={ticket?.id}
+                  ticketStatus={ticket?.status}
+                  onTicketUpdated={loadTicketData}
+                />
+                <StateTimeline
+                  status={ticket?.status || 'awaiting_adm_approval'}
+                  scheduledDate={scheduledDate}
+                  notifyTenant={ticket?.notify_tenant}
+                />
+              </div>
+            </details>
+          </aside>
+        </div>
+      )}
+    </div>
   )
 }
