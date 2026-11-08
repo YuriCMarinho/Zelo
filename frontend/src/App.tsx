@@ -31,30 +31,23 @@ function HeroWaveTexture() {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      {/* Linha 1: sobe da base abaixo da casa em curva acentuada para o topo direito */}
+      {/* Linha 1 (Superior): paralela externa com espaçamento uniforme */}
       <path
-        d="M 1060 405 C 1110 320, 1200 210, 1290 130 C 1340 80, 1390 35, 1425 0"
-        stroke="rgba(246, 243, 238, 0.22)"
+        d="M 970 405 C 1000 330, 1060 250, 1130 180 C 1200 120, 1270 120, 1330 65 C 1365 35, 1390 10, 1400 0"
+        stroke="rgba(246, 243, 238, 0.20)"
         strokeWidth="2.2"
         strokeLinecap="round"
       />
-      {/* Linha 2: onda superior que passa sobre a cumeeira da casa amarela */}
+      {/* Linha 2 (Central): traço guia cruzando a casa com ondulação para o canto superior direito */}
       <path
-        d="M 780 190 C 890 210, 990 170, 1090 130 C 1190 90, 1290 40, 1375 0"
-        stroke="rgba(246, 243, 238, 0.16)"
-        strokeWidth="1.8"
+        d="M 1020 405 C 1050 330, 1110 260, 1180 200 C 1250 140, 1320 145, 1380 90 C 1410 60, 1430 25, 1440 10"
+        stroke="rgba(246, 243, 238, 0.26)"
+        strokeWidth="2.4"
         strokeLinecap="round"
       />
-      {/* Linha 3: onda central que cruza o corpo da casa e sobe em direção ao canto direito */}
+      {/* Linha 3 (Inferior): paralela interna mantendo o espaçamento harmônico */}
       <path
-        d="M 700 270 C 820 295, 940 260, 1060 220 C 1180 175, 1295 105, 1435 25"
-        stroke="rgba(246, 243, 238, 0.20)"
-        strokeWidth="2.0"
-        strokeLinecap="round"
-      />
-      {/* Linha 4: onda inferior que passa sob a casa e sobe com espaçamento harmônico */}
-      <path
-        d="M 580 350 C 700 375, 830 350, 960 330 C 1080 305, 1200 245, 1305 165 C 1365 120, 1410 80, 1440 60"
+        d="M 1070 405 C 1100 330, 1160 270, 1230 220 C 1300 160, 1370 170, 1430 115 C 1435 110, 1438 105, 1440 100"
         stroke="rgba(246, 243, 238, 0.18)"
         strokeWidth="2.0"
         strokeLinecap="round"
