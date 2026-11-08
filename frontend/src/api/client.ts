@@ -17,12 +17,19 @@ export async function fetchProperties(): Promise<Property[]> {
     if (Array.isArray(data) && data.length > 0) {
       // Mapeia para o contrato de Property da UI
       return data.map((item: Record<string, unknown>, index: number) => {
-        const fallback = (defaultProperties[index % defaultProperties.length] ?? defaultProperties[0])!
+        const matched = defaultProperties.find((p) => p.id === item.id)
+        const fallback = matched || (defaultProperties[index % defaultProperties.length] ?? defaultProperties[0])!
+        const isRecife =
+          String(item.city || '').toLowerCase().includes('recife') ||
+          String(item.id || '').includes('recife') ||
+          String(item.id || '').includes('portodigital')
         return {
           id: String(item.id || fallback.id),
           title: String(item.name || item.title || fallback.title),
-          location: item.address ? `${String(item.address)}, ${String(item.city || 'Fortaleza')}` : fallback.location,
-          neighborhood: String(item.neighborhood || fallback.neighborhood),
+          location: item.address
+            ? `${String(item.address)}, ${String(item.city || 'Recife')}`
+            : fallback.location,
+          neighborhood: String(item.neighborhood || (isRecife ? 'Recife Antigo' : fallback.neighborhood)),
           description: String(item.description || fallback.description),
           image: fallback.image,
           gallery: fallback.gallery,
@@ -35,7 +42,7 @@ export async function fetchProperties(): Promise<Property[]> {
           reviews: fallback.reviews,
           amenities: fallback.amenities,
           occupancy: fallback.occupancy,
-          tag: fallback.tag,
+          tag: isRecife ? 'Porto Digital · Recife' : fallback.tag,
         }
       })
     }
@@ -84,22 +91,31 @@ export async function fetchQuotes(ticketId: string): Promise<Quote[]> {
 export async function approveQuote(
   ticketId: string,
   providerId: string,
+  runId?: string,
 ): Promise<MaintenanceTicket> {
   try {
     const res = await fetch(`${API_BASE}/tickets/${ticketId}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider_id: providerId }),
+      body: JSON.stringify({
+        provider_id: providerId,
+        run_id: runId || `run-approve-${Date.now()}`,
+      }),
     })
     if (res.ok) {
       return await res.json()
     }
-  } catch {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.detail ?? `Falha ao aprovar orçamento (HTTP ${res.status})`)
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes('Falha ao aprovar')) {
+      throw e
+    }
     // Modo offline / mock fallback para testes locais
   }
   return {
     id: ticketId,
-    run_id: `run-approved-${Date.now()}`,
+    run_id: runId || `run-approved-${Date.now()}`,
     property_id: 'casa-aurora',
     reported_by_role: 'tenant',
     category: 'eletricista',
@@ -122,7 +138,12 @@ export async function startTicketResolution(ticketId: string): Promise<Maintenan
     if (res.ok) {
       return await res.json()
     }
-  } catch {
+    const err = await res.json().catch(() => null)
+    throw new Error(err?.detail ?? `Falha ao iniciar resolução (HTTP ${res.status})`)
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.includes('Falha ao iniciar')) {
+      throw e
+    }
     // fallback
   }
   return {

@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import type { MaintenanceTicket, Property, Quote } from '../contracts'
+import { useEffect, useState } from 'react'
+import { fetchAuditEvents } from '../api/client'
+import type { AuditEvent, MaintenanceTicket, Property, Quote } from '../contracts'
 
 const money = (val: number | null | undefined) =>
   val != null
@@ -31,6 +32,26 @@ export function QuotesComparison({
   })
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+
+  useEffect(() => {
+    let ignore = false
+    if (!ticket?.id) return
+
+    fetchAuditEvents(ticket.id)
+      .then((evs) => {
+        if (!ignore) {
+          setAuditEvents(evs)
+        }
+      })
+      .catch(() => {
+        // Ignora erro em modo demo/mock
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [ticket?.id, ticket?.status])
 
   const selectedQuote = quotes.find((q) => q.provider_id === selectedProviderId) || quotes[0]
 
@@ -121,6 +142,66 @@ export function QuotesComparison({
         ) : null}
       </div>
 
+      {/* Trilha de Auditoria exibida somente quando houver eventos registrados */}
+      {ticket && auditEvents.length > 0 && (
+        <section
+          style={{
+            margin: '0 0 20px',
+            padding: '16px 20px',
+            background: 'var(--areia)',
+            borderRadius: '16px',
+            border: '1px solid var(--mar-08)',
+          }}
+          aria-label="Trilha de auditoria dos agentes"
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px' }}>
+              Como os agentes processaram este chamado
+            </h3>
+            <span className="tabular-nums" style={{ fontSize: '12px', color: 'var(--mar-72)', fontWeight: 600 }}>
+              {auditEvents.length} etapa(s) registrada(s)
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {auditEvents.slice(0, 6).map((ev) => (
+              <div
+                key={ev.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  padding: '8px 12px',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="audit-node" style={{ fontSize: '10px', padding: '2px 8px' }}>
+                      {ev.node}
+                    </span>
+                    <strong>{ev.event_type}</strong>
+                  </div>
+                  <time className="tabular-nums" style={{ fontSize: '11px', color: 'var(--mar-72)' }}>
+                    {new Date(ev.created_at).toLocaleTimeString('pt-BR')}
+                  </time>
+                </div>
+                {ev.payload && Object.keys(ev.payload).length > 0 && (
+                  <div style={{ fontSize: '11px', color: 'var(--mar-72)', marginTop: '2px' }}>
+                    {Object.entries(ev.payload)
+                      .slice(0, 3)
+                      .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+                      .join(' · ')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Lista de Cotações Recebidas */}
       <div className="adm-quotes-list" role="radiogroup" aria-label="Opções de orçamento">
         {quotes.length === 0 ? (
@@ -154,8 +235,8 @@ export function QuotesComparison({
                 <div className="quote-card-header">
                   <div>
                     <h3 className="quote-provider-name">{name}</h3>
-                    <span className="quote-provider-meta">
-                      ★ {rating} · Avaliado pela Zelo {quote.is_recommended ? '· Recomendado' : ''}
+                    <span className="quote-provider-meta tabular-nums">
+                      ★ {rating} · Prestador validado{quote.is_recommended ? ' · Melhor relação janela × preço' : ''}
                     </span>
                   </div>
                   <span className="quote-price tabular-nums">{money(quote.amount)}</span>
@@ -166,7 +247,6 @@ export function QuotesComparison({
                     <span className="quote-chip">{quote.proposed_availability}</span>
                   )}
                   {quote.description && <span className="quote-chip">{quote.description}</span>}
-                  <span className="quote-chip">Garantia Zelo inclusa</span>
                 </div>
               </div>
             )

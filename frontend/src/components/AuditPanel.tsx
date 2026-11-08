@@ -129,15 +129,27 @@ export function AuditPanel() {
             </div>
           ) : (
             events.map((ev) => (
-              <div key={ev.id} className="audit-item">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="audit-node">{ev.node}</span>
-                  <strong>{ev.event_type}</strong>
+              <div key={ev.id} className="audit-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="audit-node">{ev.node}</span>
+                    <strong>{ev.event_type}</strong>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: 'var(--mar-72)' }}>
+                    <span>{ev.ticket_id ? `#${ev.ticket_id.slice(0, 8)}` : ev.run_id.slice(0, 12)}</span>
+                    <time>{new Date(ev.created_at).toLocaleTimeString('pt-BR')}</time>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: 'var(--mar-72)' }}>
-                  <span>{ev.ticket_id ? `#${ev.ticket_id.slice(0, 8)}` : ev.run_id.slice(0, 12)}</span>
-                  <time>{new Date(ev.created_at).toLocaleTimeString('pt-BR')}</time>
-                </div>
+                {ev.payload && Object.keys(ev.payload).length > 0 && (
+                  <details style={{ marginTop: '6px', fontSize: '12px' }}>
+                    <summary style={{ cursor: 'pointer', color: 'var(--mar-profundo)', fontWeight: 600 }}>
+                      Ver dados da operação ({Object.keys(ev.payload).join(', ')})
+                    </summary>
+                    <pre style={{ margin: '6px 0 0', padding: '8px 12px', background: 'var(--areia)', borderRadius: '8px', fontSize: '11px', overflowX: 'auto', border: '1px solid var(--mar-08)' }}>
+                      {JSON.stringify(ev.payload, null, 2)}
+                    </pre>
+                  </details>
+                )}
               </div>
             ))
           )}
