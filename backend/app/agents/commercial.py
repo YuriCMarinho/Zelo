@@ -389,7 +389,7 @@ async def handle_commercial_message(
     if (has_reservation_intent or continuing_reservation_with_dates) and db is not None:
         if extracted is not None:
             cand_start, cand_end = extracted
-        elif history_list:
+        else:
             # Em conversa interativa multi-turn: solicita a data de check-in e check-out
             wk_start, wk_end = _next_weekend_dates()
             alt_start = date.today() + timedelta(days=14)
@@ -416,11 +416,6 @@ async def handle_commercial_message(
                     "Consultar calendário",
                 ],
             )
-        else:
-            # Fallback para chamadas diretas sem histórico e sem data explícita
-            cand_start = date.today() + timedelta(days=14)
-            cand_end = cand_start + timedelta(days=3)
-
         if cand_end <= cand_start:
             cand_end = cand_start + timedelta(days=1)
 
